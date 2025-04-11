@@ -1,0 +1,32 @@
+name: "BOLA'S STAGING: Snowflake Demo Workflow"
+
+on: 
+  push:
+    branches: 
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SNOWFLAKE_CONNECTIONS_DEFAULT_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_CONNECTIONS_DEFAULT_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_CONNECTIONS_DEFAULT_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install snowflake-cli
+        uses: Snowflake-Labs/snowflake-cli-action@v1.5
+        with:
+          cli-version: "latest"
+          default-config-file-path: ".snowflake/config.toml"
+
+      - name: Fetch repository changes
+        run: snow git fetch MY_GIT_REPO
+
+      - name: Deploy scripts to preprod environment
+        run: snow git execute @MY_GIT_REPO/branches/dev/scripts/* \
+            -D "environment='preprod'"
