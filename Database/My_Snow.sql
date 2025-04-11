@@ -1,7 +1,8 @@
+-- Create a permanent table for customer data
 USE DATABASE GITHUB;
 USE SCHEMA PUBLIC;
 
--- Create a permanent table for customer data
+
 CREATE OR REPLACE TABLE customers (
    customer_id INTEGER PRIMARY KEY,
    first_name VARCHAR(50) NOT NULL,
