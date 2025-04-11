@@ -1,9 +1,9 @@
-name: Deploy scripts to preprod
+name: "BOLA'S STAGING: Snowflake Demo Workflow"
 
-on:
+on: 
   push:
-    branches:
-      - main
+    branches: 
+      - dev
 
 jobs:
   deploy:
@@ -25,8 +25,8 @@ jobs:
           default-config-file-path: ".snowflake/config.toml"
 
       - name: Fetch repository changes
-        run: snow git fetch my_git_repo
+        run: snow git fetch MY_GIT_REPO
 
       - name: Deploy scripts to preprod environment
-        run: snow git execute @my_git_repo/branches/main/scripts/* \
+        run: snow git execute @MY_GIT_REPO/branches/dev/scripts/* \
             -D "environment='preprod'"
