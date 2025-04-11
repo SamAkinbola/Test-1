@@ -1,4 +1,4 @@
--- Create a permanent table for customer data
+-- Create a permanent table for customer data gdft
 USE DATABASE GITHUB;
 USE SCHEMA PUBLIC;
 
