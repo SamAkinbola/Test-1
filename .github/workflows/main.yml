@@ -10,9 +10,13 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SNOWFLAKE_CONNECTIONS_DEFAULT_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_CONNECTIONS_DEFAULT_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_CONNECTIONS_DEFAULT_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+       SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+       SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+       SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+       SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+       SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+       
 
     steps:
       - name: Checkout repository
