@@ -3,7 +3,7 @@ name: "BOLA'S STAGING: Snowflake Demo Workflow"
 on: 
   push:
     branches: 
-      - test
+      - dev
 
 jobs:
   deploy:
