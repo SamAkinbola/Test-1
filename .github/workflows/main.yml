@@ -1,36 +1,50 @@
-name: "BOLA'S STAGING: Snowflake Demo Workflow"
 
+#controls when the action will run
 on: 
   push:
     branches: 
       - dev
 
+  workflow dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    env:
-       SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-       SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-       SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-       SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-       SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-       
-
     steps:
+#Checkout your repository so your job can access it
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install snowflake-cli
-        uses: Snowflake-Labs/snowflake-cli-action@v1.5
-        with:
-          cli-version: "latest"
-          default-config-file-path: ".snowflake/config.toml"
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v4
+	      with:
+	        python version: '3.10'
+      
+      - name: Install Python packages
+	      run: pip install -r requirements.txt
 
-      - name: Fetch repository changes
-        run: snow git fetch MY_GIT_REPO
+      - name: Configure SnowCLI
+	      env:
+	        SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+	      run:
+	        cd $GITHUB_WORKSPACE
+	        echo "[connectios]" > config.toml
+	        echo "[connectios.dev]" >> config.toml
+	        echo "account = \"$SNOWFLAKE_ACCOUNT\"" >> config.toml
+      - name: Run Snowflake query
+        env:
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          #SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+	      run:
+	        snow --config-file $GITHUB_WORKSPACE/config.toml sql -q "ALTER GIT REPOSITORY MY_GIT_REPO FETCH"
+	        snow --config-file $GITHUB_WORKSPACE/config.toml sql -q "EXECUTE IMMEDIATE FROM @MY_GIT_REPO/branches/dev/snowflake_object/My_Snow.sql"
+#or use a longer version
+	        #snow --config-file $GITHUB_WORKSPACE/config.toml sql -q "EXECUTE IMMEDIATE FROM @MY_GIT_REPO/branches/dev/snowflake_object/databases/GITHUB/schemas/GITHUB_SCHEMA/tables/my_file.sql"
 
-      - name: Deploy scripts to preprod environment
-        run: snow git execute @MY_GIT_REPO/branches/dev/scripts/* \
-            -D "environment='preprod'"
+	  
