@@ -26,7 +26,7 @@ jobs:
         uses: Snowflake-Labs/snowflake-cli-action@v1.5
         with:
           cli-version: "latest"
-          #default-config-file-path: ".snowflake/config.toml"
+          default-config-file-path: ".snowflake/config.toml"
 
       - name: Fetch repository changes
         run: snow git fetch MY_GIT_REPO
