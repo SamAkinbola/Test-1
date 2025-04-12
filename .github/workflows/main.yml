@@ -1,32 +1,77 @@
-name: "BOLA'S STAGING: Snowflake Demo Workflow"
+name: Snowflake Query CI/CD
 
-on: 
+on:
   push:
-    branches: 
+    branches:
       - dev
+    paths:
+      - 'queries/*.sql'  # Trigger only when SQL files in queries/ change
 
 jobs:
-  deploy:
+  execute-snowflake-query:
     runs-on: ubuntu-latest
 
-    env:
-      SNOWFLAKE_CONNECTIONS_DEFAULT_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_CONNECTIONS_DEFAULT_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_CONNECTIONS_DEFAULT_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-
     steps:
-      - name: Checkout repository
+      # Step 1: Checkout the repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install snowflake-cli
-        uses: Snowflake-Labs/snowflake-cli-action@v1.5
+      # Step 2: Set up Python (Snowflake connector requires Python)
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          cli-version: "latest"
-          default-config-file-path: ".snowflake/config.toml"
+          python-version: '3.9'
 
-      - name: Fetch repository changes
-        run: snow git fetch MY_GIT_REPO
+      # Step 3: Install dependencies
+      - name: Install Snowflake connector
+        run: |
+          python -m pip install --upgrade pip
+          pip install snowflake-connector-python
 
-      - name: Deploy scripts to preprod environment
-        run: snow git execute @MY_GIT_REPO/branches/dev/scripts/* \
-            -D "environment='preprod'"
+      # Step 4: Execute Snowflake query
+      - name: Run Snowflake query
+        env:
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          #SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+        run: |
+          python - <<EOF
+          import snowflake.connector
+          import os
+
+          # Read the SQL file (assumes single query file for simplicity)
+          sql_file = "queries/My_Snow.sql"
+          with open(sql_file, 'r') as file:
+              query = file.read()
+
+          # Connect to Snowflake
+          conn = snowflake.connector.connect(
+              user=os.getenv('SNOWFLAKE_USER'),
+              password=os.getenv('SNOWFLAKE_PASSWORD'),
+              account=os.getenv('SNOWFLAKE_ACCOUNT'),
+              #warehouse=os.getenv('SNOWFLAKE_WAREHOUSE'),
+              database=os.getenv('SNOWFLAKE_DATABASE'),
+              schema=os.getenv('SNOWFLAKE_SCHEMA'),
+              role=os.getenv('SNOWFLAKE_ROLE')
+          )
+
+          # Execute the query
+          cursor = conn.cursor()
+          try:
+              cursor.execute(query)
+              print("Query executed successfully!")
+              # Optionally fetch results (if query returns data)
+              results = cursor.fetchall()
+              for row in results:
+                  print(row)
+          except Exception as e:
+              print(f"Error executing query: {e}")
+              exit(1)
+          finally:
+              cursor.close()
+              conn.close()
+          EOF
