@@ -1,4 +1,4 @@
-INSERT INTO GITHUB.PUBLIC.SECOND_TABLE (ID, TEXT_DATA, NUMERIC_VALUE, STATUS) VALUES
+INSERT INTO GITHUB.GITHUB_SCHEMA.SECOND_TABLE (ID, TEXT_DATA, NUMERIC_VALUE, STATUS) VALUES
 (1, 'Record one details', 12.34, 'Active'),
 (2, 'Information about record two', 56.78, 'Inactive'),
 (3, 'This is record number three', 90.12, 'Pending'),
