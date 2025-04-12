@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - dev
-    paths:
-      - 'queries/*.sql'  # Trigger only when SQL files in queries/ change
+    #paths:
+      #- 'queries/*.sql'  # Trigger only when SQL files in queries/ change
 
 jobs:
   execute-snowflake-query:
