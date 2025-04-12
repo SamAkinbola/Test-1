@@ -3,7 +3,7 @@ name: Snowflake Query CI/CD
 on:
   push:
     branches:
-      - de
+      - develop
     #paths:
       #- 'queries/*.sql'  # Trigger only when SQL files in queries/ change
 
