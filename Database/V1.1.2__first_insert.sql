@@ -1,0 +1,11 @@
+INSERT INTO GITHUB.GITHUB_SCHEMA.FIRST_TABLE (COLUMN1, COLUMN2, COLUMN3, COLUMN4) VALUES
+('Row 1, Col 1', 101, '2025-04-12', TRUE),
+('Row 2, Col 1', 202, '2025-04-11', FALSE),
+('Row 3, Col 1', 303, '2025-04-10', TRUE),
+('Row 4, Col 1', 404, '2025-04-09', FALSE),
+('Row 5, Col 1', 505, '2025-04-08', TRUE),
+('Row 6, Col 1', 606, '2025-04-07', FALSE),
+('Row 7, Col 1', 707, '2025-04-06', TRUE),
+('Row 8, Col 1', 808, '2025-04-05', FALSE),
+('Row 9, Col 1', 909, '2025-04-04', TRUE),
+('Row 10, Col 1', 1010, '2025-04-03', FALSE);
