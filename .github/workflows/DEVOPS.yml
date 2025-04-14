@@ -4,7 +4,8 @@ name: snowflake-devops-demo
 on:
   push:
     branches:
-      - dev
+      - main
+  pull_request:
     paths:
       - 'Database/**'
 
