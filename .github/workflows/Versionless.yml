@@ -1,15 +1,11 @@
-name: Snowflake Deployment Workflow
+name: Snowflake Deployment Pipeline
 
 on:
   push:
     branches:
-      - Test  # Your specified branch
-  #pull_request:
-    #branches:
-      #- Test  # Your specified branch
-
-# Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+      - Test
+  
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   deploy:
@@ -26,10 +22,20 @@ jobs:
         with:
           python-version: '3.9'
 
-      # Step 3: Install Snowflake CLI
+      # Step 3: Install Snowflake CLI with verification
       - name: Install Snowflake CLI
         run: |
+          python -m pip install --upgrade pip
           pip install snowflake-cli-labs
+          # Verify installation
+          if ! command -v snowflake-cli &> /dev/null; then
+            echo "Error: snowflake-cli not found after installation"
+            exit 1
+          fi
+          # Debug: Show snowflake-cli version and PATH
+          echo "Snowflake CLI version:"
+          snowflake-cli --version
+          echo "PATH: $PATH"
         continue-on-error: false
 
       # Step 4: Configure Snowflake CLI
@@ -47,7 +53,7 @@ jobs:
             echo "Error: Missing required Snowflake credentials"
             exit 1
           fi
-          mkdir -p ~/.snowflake   #creaate the .snowflake directory
+          mkdir -p ~/.snowflake
           echo "[connections.default]" > ~/.snowflake/config
           echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
           echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
@@ -93,7 +99,7 @@ jobs:
           echo "Failed scripts: ${#FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
           echo "${FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
 
-          # Upload log file as artifact
+          # Upload log file as artifact for debugging
           echo "Uploading log file as artifact..."
           mkdir -p artifacts
           mv $LOG_FILE artifacts/
@@ -104,7 +110,7 @@ jobs:
             exit 1
           fi
 
-      # Step 6: Upload execution log
+      # Step 6: Upload log artifact
       - name: Upload execution log
         if: always()
         uses: actions/upload-artifact@v4
