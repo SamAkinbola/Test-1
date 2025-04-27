@@ -35,19 +35,18 @@ jobs:
       # Step 4: Configure Snowflake CLI
       - name: Configure Snowflake CLI
         env:
-
-	  SF_ACCOUNT: ${{ secrets.SF_ACCOUNT }}
-          SF_USERNAME: ${{ secrets.SF_USERNAME }}
-          SF_ROLE: ${{ secrets.SF_ROLE }}
-          SF_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
-          SF_DATABASE: ${{ secrets.SF_DATABASE }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SF_PASSWORD }}
-          #SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          #SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          #SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-          #SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-          #SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          #SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+	  #SF_ACCOUNT: ${{ secrets.SF_ACCOUNT }}
+          #SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          #SF_ROLE: ${{ secrets.SF_ROLE }}
+          #SF_WAREHOUSE: ${{ secrets.SF_WAREHOUSE }}
+          #SF_DATABASE: ${{ secrets.SF_DATABASE }}
+          #SNOWFLAKE_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           #SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
         run: |
           if [[ -z "$SNOWFLAKE_ACCOUNT" || -z "$SNOWFLAKE_USER" || -z "$SNOWFLAKE_PASSWORD" ]]; then
