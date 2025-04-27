@@ -1,5 +1,5 @@
 -- Create a table named "employees" with columns for ID, name, department, and salary
-CREATE TABLE FINANCE.CREDIT.employees (
+CREATE OR REPLACE TABLE FINANCE.CREDIT.employees (
     id INT,
     name VARCHAR(255),
     department VARCHAR(255),
