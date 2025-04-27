@@ -1,78 +1,52 @@
-name: CI
+name: Execute Snowflake Scripts on Test Branch
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow only on push to the Test branch
   push:
+    # Only run on pushes to the 'test' branch
     branches:
-      - Test
+      - test
+    # Only run if changes occur in the 'Database' directory or its subdirectories
+    paths:
+      - 'Database/**'
 
-  # Allows manual triggering from the Actions tab
-  workflow_dispatch:
-
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  deploy:
+  # This job executes the Snowflake scripts
+  run-snowflake-scripts:
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    env:
-      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks out the repository code
-      - uses: actions/checkout@v3
+      # Step 1: Check out the repository code
+      # This action checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout code
+        uses: actions/checkout@v4 # Use the latest version of the checkout action
 
-      # Debug: List repository contents
-      - name: Debug - List repository contents
-        run: |
-          echo "Listing repository contents:"
-          ls -R
+      # Step 2: Run Snowflake SQL Scripts
+      # This step uses the official Snowflake action to execute SQL files
+      - name: Run Snowflake Scripts
+        uses: snowflakedb/snowflake-action@v1.5 # Use a specific version of the Snowflake action
+        with:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 
-      # Install SnowSQL
-      - name: Install SnowSQL
-        run: |
-          echo "Downloading SnowSQL installer..."
-          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
-          echo "Installing SnowSQL to ~/bin..."
-          SNOWSQL_DEST=~/bin bash snowsql-1.2.9-linux_x86_64.bash
-          echo "Verifying SnowSQL installation..."
-          ~/bin/snowsql --version || { echo "SnowSQL installation failed"; exit 1; }
+          # Path to the SQL script(s) or directory containing SQL scripts to execute
+          # Assumes your scripts are in the 'Database' folder relative to the repository root
+          sql_path: ./Database
+          # Optional: You can specify a single file like: sql_path: ./Database/my_script.sql
+          # Optional: Use sql_text: 'SELECT 1;' to run inline SQL instead of files
 
-      # Debug: List SQL files in Database folder
-      - name: Debug - List SQL files in Database folder
-        run: |
-          echo "Listing SQL files in Database folder:"
-          ls -l Database/*.sql || echo "No SQL files found in Database folder"
+        # Optional: Set environment variables if needed by the action or scripts
+        # env:
+        #   MY_ENV_VAR: 'some_value'
 
-      # Upload all SQL files from Database folder to Snowflake stage
-      - name: Upload SQL files from Database folder to Snowflake stage
-        run: |
-          echo "Uploading SQL files to Snowflake stage..."
-          for file in Database/*.sql; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              /bin/snowsql -q "put file://$(pwd)/$file @/${{ github.ref_name }}/database overwrite=true" -o friendly=false || { echo "Failed to upload $file"; exit 1; }
-            else
-              echo "No SQL files found in Database folder"
-            fi
-          done
-
-      # Execute all SQL files from Database folder in Snowflake
-      - name: Execute SQL files from Database folder
-        run: |
-          echo "Executing SQL files in Snowflake..."
-          for file in Database/*.sql; do
-            if [ -f "$file" ]; then
-              filename=$(basename "$file")
-              echo "Executing $filename..."
-              /bin/snowsql -q "execute script @/${{ github.ref_name }}/database/$filename" -o friendly=false || { echo "Failed to execute $filename"; exit 1; }
-            else
-              echo "No SQL files to execute"
-            fi
-          done
-        continue-on-error: true # Optional: Continue if execution fails
+      # Optional Step 3: Add any post-execution steps if needed
+      # - name: Post Execution Step
+      #   run: echo "Snowflake scripts executed successfully."
