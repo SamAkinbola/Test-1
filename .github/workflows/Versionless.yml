@@ -3,41 +3,68 @@ name: Snowflake Deployment Pipeline
 on:
   push:
     branches:
-      - Test
-  workflow_dispatch:  # Allow manual triggering
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Changed to ubuntu-22.04 for stability
 
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Python
+      # Step 2: Set up Python with debugging
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
+        run: |
+          python --version
+          pip --version
+          echo "Python site packages:"
+          python -m site
 
-      # Step 3: Install Snowflake CLI with verification
+      # Step 3: Install Snowflake CLI with enhanced debugging
       - name: Install Snowflake CLI
         run: |
+          # Upgrade pip and install specific version of snowflake-cli-labs
           python -m pip install --upgrade pip
-          pip install snowflake-cli-labs
+          pip install snowflake-cli-labs==2.4.0 --verbose > pip_install.log 2>&1
+          # Ensure user bin directory is in PATH
+          export PATH=$PATH:/home/runner/.local/bin
+          # Debug: Check installation directory
+          echo "Listing /home/runner/.local/bin:"
+          ls -la /home/runner/.local/bin
+          echo "Listing pip installed files:"
+          find /home/runner/.local -type f 2>/dev/null
           # Verify installation
           if ! command -v snowflake-cli &> /dev/null; then
             echo "Error: snowflake-cli not found after installation"
+            echo "Contents of pip_install.log:"
+            cat pip_install.log
             exit 1
           fi
-          # Debug: Show snowflake-cli version and PATH
+          # Debug: Show snowflake-cli version and environment
           echo "Snowflake CLI version:"
           snowflake-cli --version
           echo "PATH: $PATH"
+          echo "pip freeze output:"
+          pip freeze
+          echo "Python executable:"
+          which python
         continue-on-error: false
 
-      # Step 4: Configure Snowflake CLI
+      # Step 4: Upload pip install log artifact
+      - name: Upload pip install log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-install-log
+          path: pip_install.log
+
+      # Step 5: Configure Snowflake CLI
       - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -62,7 +89,7 @@ jobs:
           echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
           echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
 
-      # Step 5: Execute Snowflake SQL scripts with error handling
+      # Step 6: Execute Snowflake SQL scripts with error handling
       - name: Execute Snowflake Scripts
         run: |
           # Initialize variables
@@ -109,7 +136,7 @@ jobs:
             exit 1
           fi
 
-      # Step 6: Upload log artifact
+      # Step 7: Upload log artifact
       - name: Upload execution log
         if: always()
         uses: actions/upload-artifact@v4
@@ -117,7 +144,7 @@ jobs:
           name: snowflake-execution-log
           path: artifacts/
 
-      # Step 7: Clean up
+      # Step 8: Clean up
       - name: Clean up
         if: always()
         run: |
