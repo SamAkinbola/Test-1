@@ -47,6 +47,7 @@ jobs:
             echo "Error: Missing required Snowflake credentials"
             exit 1
           fi
+          mkdir -p ~/.snowflake   #creaate the .snowflake directory
           echo "[connections.default]" > ~/.snowflake/config
           echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
           echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
@@ -54,7 +55,7 @@ jobs:
           echo "role = $SNOWFLAKE_ROLE" >> ~/.snowflake/config
           echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
           echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
-          #echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
+          echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
 
       # Step 5: Execute Snowflake SQL scripts with error handling
       - name: Execute Snowflake Scripts
