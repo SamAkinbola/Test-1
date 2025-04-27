@@ -21,21 +21,19 @@ jobs:
         with:
           python-version: 3.8.x
 
-      # Step 3: Install Snowflake CLI with verification
-      - name: Install Snowflake CLI
+      # Install Python dependencies (if needed)
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install snowflake-cli-labs
-          # Verify installation
-          if ! command -v snowflake-cli &> /dev/null; then
-            echo "Error: snowflake-cli not found after installation"
-            exit 1
-          fi
-          # Debug: Show snowflake-cli version and PATH
-          echo "Snowflake CLI version:"
-          snowflake-cli --version
-          echo "PATH: $PATH"
-        continue-on-error: false
+          pip install snowflake-cli-labs # Optional: Install Snowflake CLI as a Python package
+          # Add other dependencies, e.g., pip install snowflake-snowpark-python
+
+      # Install Snowflake CLI using the official action
+      - name: Install Snowflake CLI
+        uses: snowflakedb/snowflake-cli-action@v1.5
+        with:
+          cli-version: "latest" # Or specify a version, e.g., "3.6.0"
+          default-config-file-path: "config.toml" # Optional, if using a config file
 
       # Step 4: Configure Snowflake CLI
       - name: Configure Snowflake CLI
