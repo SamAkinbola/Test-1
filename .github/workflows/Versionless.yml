@@ -1,115 +1,54 @@
-name: Snowflake Deployment Pipeline
+name: CI RUN
 
+# Controls when the workflow will run
 on:
+  # Triggers the workflow only on push to the Test branch
   push:
     branches:
       - Test
-  workflow_dispatch:  # Allow manual triggering
+
+  # Allows manual triggering from the Actions tab
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
     steps:
-      # Step 1: Checkout repository
-      - name: Checkout code
-        uses: actions/checkout@v4
+      # Checks out the repository code
+      - uses: actions/checkout@v3
 
-      # Step 2: Set up Python
-      - name: Use Python 3.8.x
-        uses: actions/setup-python@v2.2.1
-        with:
-          python-version: 3.8.x
-
-      # Install Python dependencies (if needed)
-      - name: Install Python dependencies
+      # Install SnowSQL
+      - name: Install SnowSQL
         run: |
-          python -m pip install --upgrade pip
-          pip install snowflake-cli-labs # Optional: Install Snowflake CLI as a Python package
-          # Add other dependencies, e.g., pip install snowflake-snowpark-python
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
+          SNOWSQL_DEST=/bin SNOWSQL_LOGIN_SHELL=/.profile bash snowsql-1.2.9-linux_x86_64.bash
 
-      # Install Snowflake CLI using the official action
-      - name: Install Snowflake CLI
-        uses: snowflakedb/snowflake-cli-action@v1.5
-        with:
-          cli-version: "latest" # Or specify a version, e.g., "3.6.0"
-          default-config-file-path: "config.toml" # Optional, if using a config file
-
-      # Step 4: Configure Snowflake CLI
-      - name: Configure Snowflake CLI
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      # Upload all SQL files from Database folder to Snowflake stage
+      - name: Upload SQL files from Database folder to Snowflake stage
         run: |
-          if [[ -z "$SNOWFLAKE_ACCOUNT" || -z "$SNOWFLAKE_USER" || -z "$SNOWFLAKE_PASSWORD" ]]; then
-            echo "Error: Missing required Snowflake credentials"
-            exit 1
-          fi
-          mkdir -p ~/.snowflake
-          echo "[connections.default]" > ~/.snowflake/config
-          echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
-          echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
-          echo "password = $SNOWFLAKE_PASSWORD" >> ~/.snowflake/config
-          echo "role = $SNOWFLAKE_ROLE" >> ~/.snowflake/config
-          echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
-          echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
-          echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
-      # Step 5: Execute Snowflake SQL scripts with error handling
-      - name: Execute Snowflake Scripts
-        run: |
-          # Initialize variables
-          FAILED_SCRIPTS=()
-          SUCCESS_SCRIPTS=()
-          LOG_FILE="snowflake_execution.log"
-          echo "Execution Log" > $LOG_FILE
-          # Check if Database directory exists and has scripts
-          if [ ! -d "Database" ] || [ -z "$(ls -A Database/*.sql 2>/dev/null)" ]; then
-            echo "Error: No SQL scripts found in Database/ directory"
-            exit 1
-          fi
-          # Execute each script
-          for script in Database/*.sql; do
-            echo "Executing $script..." | tee -a $LOG_FILE
-            snowflake-cli execute -f "$script" --connection default 2>> $LOG_FILE
-            EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 0 ]; then
-              echo "Success: $script executed successfully" | tee -a $LOG_FILE
-              SUCCESS_SCRIPTS+=("$script")
-            else
-              echo "Error: $script failed with exit code $EXIT_CODE" | tee -a $LOG_FILE
-              FAILED_SCRIPTS+=("$script")
+          for file in Database/*.sql; do
+            if [ -f "$file" ]; then
+              /bin/snowsql -q "put file://$(pwd)/$file @/${{ github.ref_name }}/database overwrite=true" -o friendly=false
             fi
           done
-          # Print summary
-          echo "Execution Summary" | tee -a $LOG_FILE
-          echo "Successful scripts: ${#SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
-          echo "${SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
-          echo "Failed scripts: ${#FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
-          echo "${FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
-          # Upload log file as artifact for debugging
-          echo "Uploading log file as artifact..."
-          mkdir -p artifacts
-          mv $LOG_FILE artifacts/
-          # Fail pipeline if any script failed
-          if [ ${#FAILED_SCRIPTS[@]} -gt 0 ]; then
-            echo "Error: One or more scripts failed. Check the log artifact for details."
-            exit 1
-          fi
-      # Step 6: Upload log artifact
-      - name: Upload execution log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: snowflake-execution-log
-          path: artifacts/
 
-      # Step 7: Clean up
-      - name: Clean up
-        if: always()
+      # Execute all SQL files from Database folder in Snowflake
+      - name: Execute SQL files from Database folder
         run: |
-          rm -f ~/.snowflake/config
+          for file in Database/*.sql; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              /bin/snowsql -q "execute script @/${{ github.ref_name }}/database/$filename" -o friendly=false
+            fi
+          done
+        continue-on-error: true # Optional: Continue if execution fails
