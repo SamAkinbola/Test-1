@@ -1,4 +1,4 @@
-name: CI RUN
+name: CI
 
 # Controls when the workflow will run
 on:
@@ -27,28 +27,52 @@ jobs:
       # Checks out the repository code
       - uses: actions/checkout@v3
 
+      # Debug: List repository contents
+      - name: Debug - List repository contents
+        run: |
+          echo "Listing repository contents:"
+          ls -R
+
       # Install SnowSQL
       - name: Install SnowSQL
         run: |
+          echo "Downloading SnowSQL installer..."
           curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
+          echo "Installing SnowSQL to ~/bin..."
           SNOWSQL_DEST=~/bin bash snowsql-1.2.9-linux_x86_64.bash
+          echo "Verifying SnowSQL installation..."
+          ~/bin/snowsql --version || { echo "SnowSQL installation failed"; exit 1; }
+
+      # Debug: List SQL files in Database folder
+      - name: Debug - List SQL files in Database folder
+        run: |
+          echo "Listing SQL files in Database folder:"
+          ls -l Database/*.sql || echo "No SQL files found in Database folder"
 
       # Upload all SQL files from Database folder to Snowflake stage
       - name: Upload SQL files from Database folder to Snowflake stage
         run: |
+          echo "Uploading SQL files to Snowflake stage..."
           for file in Database/*.sql; do
             if [ -f "$file" ]; then
-              /bin/snowsql -q "put file://$(pwd)/$file @/${{ github.ref_name }}/database overwrite=true" -o friendly=false
+              echo "Uploading $file..."
+              /bin/snowsql -q "put file://$(pwd)/$file @/${{ github.ref_name }}/database overwrite=true" -o friendly=false || { echo "Failed to upload $file"; exit 1; }
+            else
+              echo "No SQL files found in Database folder"
             fi
           done
 
       # Execute all SQL files from Database folder in Snowflake
       - name: Execute SQL files from Database folder
         run: |
+          echo "Executing SQL files in Snowflake..."
           for file in Database/*.sql; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              /bin/snowsql -q "execute script @/${{ github.ref_name }}/database/$filename" -o friendly=false
+              echo "Executing $filename..."
+              /bin/snowsql -q "execute script @/${{ github.ref_name }}/database/$filename" -o friendly=false || { echo "Failed to execute $filename"; exit 1; }
+            else
+              echo "No SQL files to execute"
             fi
           done
         continue-on-error: true # Optional: Continue if execution fails
