@@ -5,7 +5,7 @@ on:
   push:
     # Only run on pushes to the 'test' branch
     branches:
-      - test
+      - Test
     # Only run if changes occur in the 'Database' directory or its subdirectories
     paths:
       - 'Database/**'
