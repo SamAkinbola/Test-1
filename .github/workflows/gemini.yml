@@ -1,0 +1,52 @@
+name: Execute Snowflake Scripts on Test Branch
+
+# Controls when the workflow will run
+on:
+  push:
+    # Only run on pushes to the 'test' branch
+    branches:
+      - Test
+    # Only run if changes occur in the 'Database' directory or its subdirectories
+    paths:
+      - 'Database/**'
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This job executes the Snowflake scripts
+  run-snowflake-scripts:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Step 1: Check out the repository code
+      # This action checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout code
+        uses: actions/checkout@v4 # Use the latest version of the checkout action
+
+      # Step 2: Run Snowflake SQL Scripts
+      # This step uses the official Snowflake action to execute SQL files
+      - name: Run Snowflake Scripts
+        uses: snowflakedb/snowflake-action@v1.5 # Use a specific version of the Snowflake action
+        with:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+          # Path to the SQL script(s) or directory containing SQL scripts to execute
+          # Assumes your scripts are in the 'Database' folder relative to the repository root
+          sql_path: ./Database
+          # Optional: You can specify a single file like: sql_path: ./Database/my_script.sql
+          # Optional: Use sql_text: 'SELECT 1;' to run inline SQL instead of files
+
+        # Optional: Set environment variables if needed by the action or scripts
+        # env:
+        #   MY_ENV_VAR: 'some_value'
+
+      # Optional Step 3: Add any post-execution steps if needed
+      # - name: Post Execution Step
+      #   run: echo "Snowflake scripts executed successfully."
