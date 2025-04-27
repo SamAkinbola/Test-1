@@ -3,68 +3,41 @@ name: Snowflake Deployment Pipeline
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:
+      - Test
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   deploy:
-    runs-on: ubuntu-22.04  # Changed to ubuntu-22.04 for stability
+    runs-on: ubuntu-latest
 
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Python with debugging
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # Step 2: Set up Python
+      - name: Use Python 3.8.x
+        uses: actions/setup-python@v2.2.1
         with:
-          python-version: '3.10'
-        run: |
-          python --version
-          pip --version
-          echo "Python site packages:"
-          python -m site
+          python-version: 3.8.x
 
-      # Step 3: Install Snowflake CLI with enhanced debugging
+      # Step 3: Install Snowflake CLI with verification
       - name: Install Snowflake CLI
         run: |
-          # Upgrade pip and install specific version of snowflake-cli-labs
           python -m pip install --upgrade pip
-          pip install snowflake-cli-labs==2.4.0 --verbose > pip_install.log 2>&1
-          # Ensure user bin directory is in PATH
-          export PATH=$PATH:/home/runner/.local/bin
-          # Debug: Check installation directory
-          echo "Listing /home/runner/.local/bin:"
-          ls -la /home/runner/.local/bin
-          echo "Listing pip installed files:"
-          find /home/runner/.local -type f 2>/dev/null
+          pip install snowflake-cli-labs
           # Verify installation
           if ! command -v snowflake-cli &> /dev/null; then
             echo "Error: snowflake-cli not found after installation"
-            echo "Contents of pip_install.log:"
-            cat pip_install.log
             exit 1
           fi
-          # Debug: Show snowflake-cli version and environment
+          # Debug: Show snowflake-cli version and PATH
           echo "Snowflake CLI version:"
           snowflake-cli --version
           echo "PATH: $PATH"
-          echo "pip freeze output:"
-          pip freeze
-          echo "Python executable:"
-          which python
         continue-on-error: false
 
-      # Step 4: Upload pip install log artifact
-      - name: Upload pip install log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-install-log
-          path: pip_install.log
-
-      # Step 5: Configure Snowflake CLI
+      # Step 4: Configure Snowflake CLI
       - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -88,8 +61,7 @@ jobs:
           echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
           echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
           echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
-
-      # Step 6: Execute Snowflake SQL scripts with error handling
+      # Step 5: Execute Snowflake SQL scripts with error handling
       - name: Execute Snowflake Scripts
         run: |
           # Initialize variables
@@ -97,13 +69,11 @@ jobs:
           SUCCESS_SCRIPTS=()
           LOG_FILE="snowflake_execution.log"
           echo "Execution Log" > $LOG_FILE
-
           # Check if Database directory exists and has scripts
           if [ ! -d "Database" ] || [ -z "$(ls -A Database/*.sql 2>/dev/null)" ]; then
             echo "Error: No SQL scripts found in Database/ directory"
             exit 1
           fi
-
           # Execute each script
           for script in Database/*.sql; do
             echo "Executing $script..." | tee -a $LOG_FILE
@@ -117,26 +87,22 @@ jobs:
               FAILED_SCRIPTS+=("$script")
             fi
           done
-
           # Print summary
           echo "Execution Summary" | tee -a $LOG_FILE
           echo "Successful scripts: ${#SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
           echo "${SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
           echo "Failed scripts: ${#FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
           echo "${FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
-
           # Upload log file as artifact for debugging
           echo "Uploading log file as artifact..."
           mkdir -p artifacts
           mv $LOG_FILE artifacts/
-
           # Fail pipeline if any script failed
           if [ ${#FAILED_SCRIPTS[@]} -gt 0 ]; then
             echo "Error: One or more scripts failed. Check the log artifact for details."
             exit 1
           fi
-
-      # Step 7: Upload log artifact
+      # Step 6: Upload log artifact
       - name: Upload execution log
         if: always()
         uses: actions/upload-artifact@v4
@@ -144,7 +110,7 @@ jobs:
           name: snowflake-execution-log
           path: artifacts/
 
-      # Step 8: Clean up
+      # Step 7: Clean up
       - name: Clean up
         if: always()
         run: |
