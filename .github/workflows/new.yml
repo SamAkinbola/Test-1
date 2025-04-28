@@ -7,7 +7,7 @@ on:
       - Bola
     paths:
       - 'Database/'
-      
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,21 +15,21 @@ jobs:
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4 # Updated to latest version for better compatibility
 
       # Step 2: Set up Python
-      - name: Use Python 3.8.x
-        uses: actions/setup-python@v2.2.1
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5 # Updated to latest version
         with:
-          python-version: 3.8.x
+          python-version: '3.8'
 
       # Step 3: Install Snowflake CLI
-      - uses: snowflakedb/snowflake-cli-action@v1.5
-        with:
-          cli-version: "latest"
-          default-config-file-path: "config.toml"
+      - name: Install Snowflake CLI
+        run: |
+          pip install snowflake-cli-labs # Install snowflake-cli explicitly
+          snowflake --version # Verify installation
 
-      # Step 4: Configure Snowflake CLI
+      # Step 4: Configure and Run Snowflake CLI
       - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -42,8 +42,12 @@ jobs:
         run: |
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           python --version
-          #echo "Step 1: Installing snowflake"
-          #pip install snowflake-cli
-          
-          echo "Step 2: Running snowflake"
-          snowflake-cli -f $GITHUB_WORKSPACE/Database -a $SF_ACCOUNT -u $SF_USERNAME -r $SF_ROLE -w $SF_WAREHOUSE -d $SF_DATABASE 
+          echo "Running Snowflake CLI"
+          snowflake sql -c default -f $GITHUB_WORKSPACE/Database \
+            --account $SNOWFLAKE_ACCOUNT \
+            --user $SNOWFLAKE_USER \
+            --password $SNOWFLAKE_PASSWORD \
+            --role $SNOWFLAKE_ROLE \
+            --warehouse $SNOWFLAKE_WAREHOUSE \
+            --database $SNOWFLAKE_DATABASE \
+            --schema $SNOWFLAKE_SCHEMA
