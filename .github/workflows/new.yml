@@ -41,7 +41,7 @@ jobs:
         run: |
           set -e
           echo "Checking SnowSQL download URL..."
-          SNOWSQL_VERSION="1.3.0"
+          SNOWSQL_VERSION="1.3.3"
           SNOWSQL_URL="https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.3/linux_x86_64/snowsql-${SNOWSQL_VERSION}-linux_x86_64.bash"
           curl -f -I "$SNOWSQL_URL" || { echo "SnowSQL version $SNOWSQL_VERSION not found at $SNOWSQL_URL"; exit 1; }
           echo "Downloading SnowSQL installer..."
