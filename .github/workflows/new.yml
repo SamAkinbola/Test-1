@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Snowflake CLI with pip
         run: |
-          python -m pip install snowflake-cli --upgrade
+          python -m pip install snowflake-cli==3.7.1
       - name: Verify Snowflake CLI Installation
         run: |
           snow --version
@@ -82,8 +82,13 @@ jobs:
           if ls Database/*.sql >/dev/null 2>&1; then
             for file in Database/*.sql; do
               echo "Executing $file..."
+              echo "SQL File Content:"
+              cat "$file"
+              echo "Environment Variables for Substitution:"
+              env | grep -v "SNOWFLAKE_PASSWORD" | grep -v "SNOWSQL_PWD" || echo "No relevant environment variables set"
               snow sql -f "$file" \
-                --connection temp_connection --verbose 2>&1 | tee output.log
+                --connection temp_connection \
+                --debug 2>&1 | tee output.log
               if [ $? -ne 0 ]; then
                 echo "Error executing $file"
                 cat output.log
