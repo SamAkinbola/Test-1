@@ -1,0 +1,44 @@
+name: SNOW SQL
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install SnowSQL
+        run: |
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
+          SNOWSQL_DEST=~/bin SNOWSQL_LOGIN_SHELL=~/.profile bash snowsql-1.2.9-linux_x86_64.bash
+
+      - name: Deploy SQL Files to Snowflake
+        run: |
+          echo "Deploying SQL files for tag: ${{ github.ref_name }}"
+          SQL_DIR="sql/${{ github.ref_name }}"
+          if [ ! -d "$SQL_DIR" ]; then
+            echo "SQL directory $SQL_DIR does not exist. Skipping deployment."
+            exit 1
+          fi
+
+          find "$SQL_DIR" -type f -name '*.sql' | sort | while read file; do
+            echo "Executing $file..."
+            ~/bin/snowsql -f "$file" -o friendly=false || {
+              echo "Failed executing $file"
+              exit 1
+            }
+          done
