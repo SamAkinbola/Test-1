@@ -55,7 +55,7 @@ jobs:
                 --accountname "${{ env.SNOWFLAKE_ACCOUNT }}" \
                 --username "${{ env.SNOWFLAKE_USER }}" \
                 --rolename "${{ env.SNOWFLAKE_ROLE }}" \
-                --warehousename "${{ env.SNOWFLAKE_WAREHOUSE }}" \
+                --warehouse "${{ env.SNOWFLAKE_WAREHOUSE }}" \
                 --dbname "${{ env.SNOWFLAKE_DATABASE }}" \
                 --schemaname "${{ env.SNOWFLAKE_SCHEMA }}"
             else
