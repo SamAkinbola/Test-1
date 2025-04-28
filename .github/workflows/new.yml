@@ -15,19 +15,24 @@ jobs:
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
-        uses: actions/checkout@v4 # Updated to latest version for better compatibility
+        uses: actions/checkout@v4
 
       # Step 2: Set up Python
       - name: Set up Python 3.8
-        uses: actions/setup-python@v5 # Updated to latest version
+        uses: actions/setup-python@v5
         with:
           python-version: '3.8'
 
       # Step 3: Install Snowflake CLI
       - name: Install Snowflake CLI
         run: |
-          pip install snowflake-cli-labs # Install snowflake-cli explicitly
-          snowflake --version # Verify installation
+          python -m pip install --upgrade pip
+          pip install snowflake-cli-labs
+          # Ensure the pip-installed binaries are in PATH
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          # Verify installation
+          which snowflake
+          snowflake --version
 
       # Step 4: Configure and Run Snowflake CLI
       - name: Configure Snowflake CLI
@@ -43,11 +48,19 @@ jobs:
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           python --version
           echo "Running Snowflake CLI"
-          snowflake sql -c default -f $GITHUB_WORKSPACE/Database \
-            --account $SNOWFLAKE_ACCOUNT \
-            --user $SNOWFLAKE_USER \
-            --password $SNOWFLAKE_PASSWORD \
-            --role $SNOWFLAKE_ROLE \
-            --warehouse $SNOWFLAKE_WAREHOUSE \
-            --database $SNOWFLAKE_DATABASE \
-            --schema $SNOWFLAKE_SCHEMA
+          # Debug: Print PATH and check snowflake command
+          echo "PATH: $PATH"
+          which snowflake
+          snowflake --version
+          # Execute SQL files
+          for file in $GITHUB_WORKSPACE/Database/*.sql; do
+            echo "Executing SQL file: $file"
+            snowflake sql -c default -f "$file" \
+              --account $SNOWFLAKE_ACCOUNT \
+              --user $SNOWFLAKE_USER \
+              --password $SNOWFLAKE_PASSWORD \
+              --role $SNOWFLAKE_ROLE \
+              --warehouse $SNOWFLAKE_WAREHOUSE \
+              --database $SNOWFLAKE_DATABASE \
+              --schema $SNOWFLAKE_SCHEMA
+          done
