@@ -23,8 +23,7 @@ jobs:
       SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
       SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
       SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-    # Step: Configure Snowflake CLI
-    name: Install Snowflake CLI with pipx first and then with pip
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,28 +35,45 @@ jobs:
 
       - name: Install Snowflake CLI with pip
         run: |
-          python -m pip install snowflake-cli
+          python -m pip install snowflake-cli==2.5.0  # Pin to a stable version
 
-      - name: Store snow version
-        shell: bash
+      - name: Verify Snowflake CLI Installation
         run: |
-          snow --version >> version_output.txt
-          echo "snow_version_pip=$(cat version_output.txt)" >> $GITHUB_ENV
-      # Step : Execute Snowflake Files
+          snow --version
+
+      - name: Test Snowflake Connection
+        run: |
+          snow connection test \
+            --account "${{ env.SNOWFLAKE_ACCOUNT }}" \
+            --username "${{ env.SNOWFLAKE_USER }}" \
+            --role "${{ env.SNOWFLAKE_ROLE }}" \
+            --warehouse "${{ env.SNOWFLAKE_WAREHOUSE }}" \
+            --database "${{ env.SNOWFLAKE_DATABASE }}" \
+            --schema "${{ env.SNOWFLAKE_SCHEMA }}" \
+            --authenticator password
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
+
+      - name: List SQL Files
+        run: |
+          ls -l Database/*.sql || echo "No SQL files found"
+
       - name: Execute Snowflake SQL Files
         env:
-          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }} # Set password as environment variable
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
         run: |
           for file in Database/*.sql; do
             if [ -f "$file" ]; then
               echo "Executing $file..."
               snow sql -f "$file" \
-                --accountname "${{ env.SNOWFLAKE_ACCOUNT }}" \
+                --account "${{ env.SNOWFLAKE_ACCOUNT }}" \
                 --username "${{ env.SNOWFLAKE_USER }}" \
-                --rolename "${{ env.SNOWFLAKE_ROLE }}" \
+                --role "${{ env.SNOWFLAKE_ROLE }}" \
                 --warehouse "${{ env.SNOWFLAKE_WAREHOUSE }}" \
-                --dbname "${{ env.SNOWFLAKE_DATABASE }}" \
-                --schemaname "${{ env.SNOWFLAKE_SCHEMA }}"
+                --database "${{ env.SNOWFLAKE_DATABASE }}" \
+                --schema "${{ env.SNOWFLAKE_SCHEMA }}" \
+                -o variable_substitution=true \
+                --authenticator password
             else
               echo "No SQL files found in Database/ folder."
             fi
