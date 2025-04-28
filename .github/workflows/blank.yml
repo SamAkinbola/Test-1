@@ -18,7 +18,7 @@ jobs:
       - name: Download SnowSQL
         run: |
           # Set the SnowSQL version (update to the latest from Snowflake docs)
-          SNOWSQL_VERSION="1.2.23"
+          SNOWSQL_VERSION="1.3.0"
           SNOWSQL_URL="https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/${SNOWSQL_VERSION}/snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip"
           # Download with error handling and redirect support
           curl --fail --location -O "$SNOWSQL_URL"
@@ -30,7 +30,7 @@ jobs:
 
       - name: Verify and Extract SnowSQL
         run: |
-          SNOWSQL_VERSION="1.2.23"  # Must match the version above
+          SNOWSQL_VERSION="1.3.0"  # Must match the version above
           # Test ZIP file integrity
           unzip -t "snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip" || { echo "Error: Invalid or corrupted ZIP file"; exit 1; }
           # Extract the ZIP file
