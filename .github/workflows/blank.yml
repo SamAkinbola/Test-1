@@ -53,28 +53,29 @@ jobs:
       - name: Test Snowflake Connection
         run: |
           mkdir -p ~/.snowflake
-          cat <<EOF > ~/.snowflake/config.toml
-          [connections.temp_connection]
-          account = "${{ env.SNOWFLAKE_ACCOUNT }}"
-          user = "${{ env.SNOWFLAKE_USER }}"
-          password = "${{ env.SNOWFLAKE_PASSWORD }}"
-          role = "${{ env.SNOWFLAKE_ROLE }}"
-          warehouse = "${{ env.SNOWFLAKE_WAREHOUSE }}"
-          database = "${{ env.SNOWFLAKE_DATABASE }}"
-          schema = "${{ env.SNOWFLAKE_SCHEMA }}"
-          authenticator = "password"
-          EOF
+          echo '[connections.temp_connection]' > ~/.snowflake/config.toml
+          echo 'account = "${{ env.SNOWFLAKE_ACCOUNT }}"' >> ~/.snowflake/config.toml
+          echo 'user = "${{ env.SNOWFLAKE_USER }}"' >> ~/.snowflake/config.toml
+          echo 'password = "${{ env.SNOWFLAKE_PASSWORD }}"' >> ~/.snowflake/config.toml
+          echo 'role = "${{ env.SNOWFLAKE_ROLE }}"' >> ~/.snowflake/config.toml
+          echo 'warehouse = "${{ env.SNOWFLAKE_WAREHOUSE }}"' >> ~/.snowflake/config.toml
+          echo 'database = "${{ env.SNOWFLAKE_DATABASE }}"' >> ~/.snowflake/config.toml
+          echo 'schema = "${{ env.SNOWFLAKE_SCHEMA }}"' >> ~/.snowflake/config.toml
+          echo 'authenticator = "password"' >> ~/.snowflake/config.toml
           chmod 0600 ~/.snowflake/config.toml
           echo "Config file content:"
           sed 's/password = .*/password = [REDACTED]/' ~/.snowflake/config.toml
           echo "SELECT CURRENT_VERSION();" > test.sql
-          snow sql -f test.sql --connection temp_connection || {
+          snow sql -f test.sql --connection temp_connection 2>&1 | tee connection_output.log
+          if [ $? -ne 0 ]; then
             echo "Connection test failed with error code $?"
+            cat connection_output.log
             cat test.sql
             exit 1
-          }
+          fi
         env:
           SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
+
 
       - name: List SQL Files
         run: |
