@@ -25,11 +25,7 @@ jobs:
 
       
 
-      # Step 4: Debug PATH
-      - name: Debug PATH
-        run: |
-          echo "PATH: $PATH"
-          ls -l $HOME/.local/bin
+      
 
       # Step 5: List Repository Contents
       - name: List Repository Contents
@@ -61,6 +57,12 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           which snowflake
           snowflake --version
+      
+      # Step 4: Debug PATH
+      - name: Debug PATH
+        run: |
+          echo "PATH: $PATH"
+          ls -l $HOME/.local/bin
       # Step 7: Configure and Run Snowflake CLI
       - name: Configure Snowflake CLI
         env:
