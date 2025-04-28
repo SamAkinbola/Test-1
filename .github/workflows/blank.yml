@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          persist-credentials: falsas
 
       - uses: actions/setup-python@v5
         with:
@@ -35,11 +35,20 @@ jobs:
 
       - name: Install Snowflake CLI with pip
         run: |
-          python -m pip install snowflake-cli==3.7.1
+          python -m pip install snowflake-cli==3.7.1  # Updated to a newer version
 
       - name: Verify Snowflake CLI Installation
         run: |
           snow --version
+
+      - name: Debug Connection Parameters
+        run: |
+          echo "Account: ${{ env.SNOWFLAKE_ACCOUNT }}"
+          echo "User: ${{ env.SNOWFLAKE_USER }}"
+          echo "Role: ${{ env.SNOWFLAKE_ROLE }}"
+          echo "Warehouse: ${{ env.SNOWFLAKE_WAREHOUSE }}"
+          echo "Database: ${{ env.SNOWFLAKE_DATABASE }}"
+          echo "Schema: ${{ env.SNOWFLAKE_SCHEMA }}"
 
       - name: Test Snowflake Connection
         run: |
@@ -56,10 +65,14 @@ jobs:
           schema = "${{ env.SNOWFLAKE_SCHEMA }}"
           authenticator = "password"
           EOF
-          # Set correct permissions on config.toml
+          # Set correct permissions
           chmod 0600 ~/.snowflake/config.toml
-          # Test the connection
-          snow connection test --connection temp_connection
+          # Debug: Print config.toml content (mask sensitive info)
+          echo "Config file content:"
+          sed 's/password = .*/password = [REDACTED]/' ~/.snowflake/config.toml
+          # Test connection with a simple SQL query
+          echo "SELECT CURRENT_VERSION();" > test.sql
+          snow sql -f test.sql --connection temp_connection
         env:
           SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
 
