@@ -35,7 +35,7 @@ jobs:
 
       - name: Install Snowflake CLI with pip
         run: |
-          python -m pip install snowflake-cli==2.5.0
+          python -m pip install snowflake-cli==3.7.1
 
       - name: Verify Snowflake CLI Installation
         run: |
