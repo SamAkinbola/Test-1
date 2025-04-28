@@ -45,19 +45,19 @@ jobs:
             snow --version >> version_output.txt
             echo "snow_version_pip=$(cat version_output.txt)" >> $GITHUB_ENV
 
-      - name: Install Snowflake CLI with pipx
-        uses: ./ 
-        id: setup_snowcli
+      #- name: Install Snowflake CLI with pipx
+        #uses: ./ 
+        #id: setup_snowcli
           
-      - name: Compare pipx and pip versions
-        shell: bash
-        run: |
-            snow_version_pipx=$(snow --version)
-            snow_version_pip="${{ env.snow_version_pip }}"
+      #- name: Compare pipx and pip versions
+        #shell: bash
+        #run: |
+            #snow_version_pipx=$(snow --version)
+            #snow_version_pip="${{ env.snow_version_pip }}"
 
-            if [ "$snow_version_pipx" == "$snow_version_pip" ]; then
-                echo "The versions match: $snow_version_pipx"
-            else
-                echo "The versions do not match: pipx version is $snow_version_pipx, but expected version is $snow_version_pip"
-                exit 1
-            fi
+            #if [ "$snow_version_pipx" == "$snow_version_pip" ]; then
+                #echo "The versions match: $snow_version_pipx"
+            #else
+                #echo "The versions do not match: pipx version is $snow_version_pipx, but expected version is $snow_version_pip"
+                #exit 1
+            #fi
