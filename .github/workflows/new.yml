@@ -6,11 +6,14 @@ on:
     branches:
       - Bola
     paths:
-      - 'Database/'
+      - "Database/"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
 
     env:
       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -23,42 +26,76 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bash curl
-        shell: bash
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-      - name: Create SnowSQL bin directory
+      - name: Install Snowflake CLI with pip
         run: |
-          mkdir -p /home/runner/bin
-          chmod -R u+w /home/runner/bin
-          echo "Created and set permissions for /home/runner/bin"
-        shell: bash
+          python -m pip install snowflake-cli==3.7.1
 
-      - name: Install SnowSQL
+      - name: Verify Snowflake CLI Installation
         run: |
-          set -e
-          echo "Checking SnowSQL download URL..."
-          SNOWSQL_VERSION="1.3.3"
-          SNOWSQL_URL="https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.3/linux_x86_64/snowsql-${SNOWSQL_VERSION}-linux_x86_64.bash"
-          curl -f -I "$SNOWSQL_URL" || { echo "SnowSQL version $SNOWSQL_VERSION not found at $SNOWSQL_URL"; exit 1; }
-          echo "Downloading SnowSQL installer..."
-          curl -f -O "$SNOWSQL_URL" || { echo "Failed to download SnowSQL installer"; exit 1; }
-          echo "Installer file details:"
-          ls -l snowsql-${SNOWSQL_VERSION}-linux_x86_64.bash
-          echo "Installing SnowSQL..."
-          bash snowsql-${SNOWSQL_VERSION}-linux_x86_64.bash --debug --install-dir=/home/runner/bin || { echo "SnowSQL installation failed. Check debug output above."; exit 1; }
-          echo "Verifying SnowSQL installation..."
-          /home/runner/bin/snowsql --version || { echo "SnowSQL not installed correctly"; exit 1; }
-        shell: bash
+          snow --version
 
-      - name: Execute SQL files
+      - name: Debug Connection Parameters
         run: |
-          set -e
-          for file in $(ls Database/*.sql | sort); do
-            echo "Executing $file"
-            /home/runner/bin/snowsql -a $SNOWFLAKE_ACCOUNT -u $SNOWFLAKE_USER --password $SNOWFLAKE_PASSWORD -r $SNOWFLAKE_ROLE -w $SNOWFLAKE_WAREHOUSE -d $SNOWFLAKE_DATABASE -s $SNOWFLAKE_SCHEMA -f $file -o friendly=false
-          done
-        shell: bash
+          echo "Account: ${{ env.SNOWFLAKE_ACCOUNT }}"
+          echo "User: ${{ env.SNOWFLAKE_USER }}"
+          echo "Role: ${{ env.SNOWFLAKE_ROLE }}"
+          echo "Warehouse: ${{ env.SNOWFLAKE_WAREHOUSE }}"
+          echo "Database: ${{ env.SNOWFLAKE_DATABASE }}"
+          echo "Schema: ${{ env.SNOWFLAKE_SCHEMA }}"
+
+      - name: Test Snowflake Connection
+        run: |
+          mkdir -p ~/.snowflake
+          echo '[connections.temp_connection]' > ~/.snowflake/config.toml
+          echo 'account = "${{ env.SNOWFLAKE_ACCOUNT }}"' >> ~/.snowflake/config.toml
+          echo 'user = "${{ env.SNOWFLAKE_USER }}"' >> ~/.snowflake/config.toml
+          echo 'password = "${{ env.SNOWFLAKE_PASSWORD }}"' >> ~/.snowflake/config.toml
+          echo 'role = "${{ env.SNOWFLAKE_ROLE }}"' >> ~/.snowflake/config.toml
+          echo 'warehouse = "${{ env.SNOWFLAKE_WAREHOUSE }}"' >> ~/.snowflake/config.toml
+          echo 'database = "${{ env.SNOWFLAKE_DATABASE }}"' >> ~/.snowflake/config.toml
+          echo 'schema = "${{ env.SNOWFLAKE_SCHEMA }}"' >> ~/.snowflake/config.toml
+          echo 'authenticator = "password"' >> ~/.snowflake/config.toml
+          chmod 0600 ~/.snowflake/config.toml
+          echo "Config file content:"
+          sed 's/password = .*/password = [REDACTED]/' ~/.snowflake/config.toml
+          echo "SELECT CURRENT_VERSION();" > test.sql
+          snow sql -f test.sql --connection temp_connection 2>&1 | tee connection_output.log
+          if [ $? -ne 0 ]; then
+            echo "Connection test failed with error code $?"
+            cat connection_output.log
+            cat test.sql
+            exit 1
+          fi
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
+
+      - name: List SQL Files
+        run: |
+          ls -l Database/*.sql || echo "No SQL files found"
+
+      - name: Execute Snowflake SQL Files
+        run: |
+          if ls Database/*.sql >/dev/null 2>&1; then
+            for file in Database/*.sql; do
+              echo "Executing $file..."
+              snow sql -f "$file" \
+                --connection temp_connection \
+                -o variable_substitution=true 2>&1 | tee output.log
+              if [ $? -ne 0 ]; then
+                echo "Error executing $file"
+                cat output.log
+                exit 1
+              fi
+            done
+          else
+            echo "No SQL files found in Database/ folder."
+          fi
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
