@@ -18,16 +18,16 @@ jobs:
         uses: actions/checkout@v4
 
       # Step 2: Set up Python
-      - name: Set up Python 3.8
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.10'
 
       # Step 3: Install Snowflake CLI
       - name: Install Snowflake CLI
         run: |
           python -m pip install --upgrade pip
-          pip install snowflake-cli-labs
+          pip install snowflake-cli-labs==2.8.1
           # Ensure the pip-installed binaries are in PATH
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           # Verify installation
@@ -52,15 +52,33 @@ jobs:
           echo "PATH: $PATH"
           which snowflake
           snowflake --version
-          # Execute SQL files
+          # Test Snowflake connection
+          echo "Testing Snowflake connection"
+          snowflake sql -c default -q "SELECT CURRENT_VERSION();" \
+            --account $SNOWFLAKE_ACCOUNT \
+            --user $SNOWFLAKE_USER \
+            --password $SNOWFLAKE_PASSWORD \
+            --role $SNOWFLAKE_ROLE \
+            --warehouse $SNOWFLAKE_WAREHOUSE \
+            --database $SNOWFLAKE_DATABASE \
+            --schema $SNOWFLAKE_SCHEMA || { echo "Snowflake connection failed"; exit 1; }
+          # Check if SQL files exist
+          echo "Listing SQL files in $GITHUB_WORKSPACE/Database/"
+          ls -l $GITHUB_WORKSPACE/Database/*.sql || { echo "No SQL files found"; exit 1; }
+          # Execute SQL files with error handling
           for file in $GITHUB_WORKSPACE/Database/*.sql; do
-            echo "Executing SQL file: $file"
-            snowflake sql -c default -f "$file" \
-              --account $SNOWFLAKE_ACCOUNT \
-              --user $SNOWFLAKE_USER \
-              --password $SNOWFLAKE_PASSWORD \
-              --role $SNOWFLAKE_ROLE \
-              --warehouse $SNOWFLAKE_WAREHOUSE \
-              --database $SNOWFLAKE_DATABASE \
-              --schema $SNOWFLAKE_SCHEMA
+            if [ -f "$file" ]; then
+              echo "Executing SQL file: $file"
+              snowflake sql -c default -f "$file" \
+                --account $SNOWFLAKE_ACCOUNT \
+                --user $SNOWFLAKE_USER \
+                --password $SNOWFLAKE_PASSWORD \
+                --role $SNOWFLAKE_ROLE \
+                --warehouse $SNOWFLAKE_WAREHOUSE \
+                --database $SNOWFLAKE_DATABASE \
+                --schema $SNOWFLAKE_SCHEMA || { echo "Error executing $file"; exit 1; }
+            else
+              echo "No SQL files found in $GITHUB_WORKSPACE/Database/"
+              exit 1
+            fi
           done
