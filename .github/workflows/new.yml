@@ -1,4 +1,4 @@
-name: Deploy Snowflake SQL Files
+name: Execute Snowflake SQL Files
 
 on:
   push:
@@ -11,16 +11,25 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      # Step 1: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Download and extract SnowSQL
-        run: |
-          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2.15/snowsql-1.2.15-linux_x86_64.zip
-          unzip snowsql-1.2.15-linux_x86_64.zip -d snowsql
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
 
-      - name: Execute SQL files
+      # Step 3: Install Snowflake CLI
+      - uses: snowflakedb/snowflake-cli-action@v1.5
+        with:
+          default-config-file-path: "config.toml"
+
+      # Step 4: Configure Snowflake CLI
+      - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -30,6 +39,76 @@ jobs:
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
         run: |
-          for file in Database/*.sql; do
-            ./snowsql/snowsql -f "$file"
+          if [[ -z "$SNOWFLAKE_ACCOUNT" || -z "$SNOWFLAKE_USER" || -z "$SNOWFLAKE_PASSWORD" ]]; then
+            echo "Error: Missing required Snowflake credentials"
+            exit 1
+          fi
+          echo "[connections.default]" > ~/.snowflake/config
+          echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
+          echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
+          echo "password = $SNOWFLAKE_PASSWORD" >> ~/.snowflake/config
+          echo "role = $SNOWFLAKE_ROLE" >> ~/.snowflake/config
+          echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
+          echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
+          echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
+
+      # Step 5: Execute Snowflake SQL scripts with error handling
+      - name: Execute Snowflake Scripts
+        run: |
+          # Initialize variables
+          FAILED_SCRIPTS=()
+          SUCCESS_SCRIPTS=()
+          LOG_FILE="snowflake_execution.log"
+          echo "Execution Log" > $LOG_FILE
+
+          # Check if Database directory exists and has scripts
+          if [ ! -d "Database" ] || [ -z "$(ls -A Database/*.sql 2>/dev/null)" ]; then
+            echo "Error: No SQL scripts found in Database/ directory"
+            exit 1
+          fi
+
+          # Execute each script
+          for script in Database/*.sql; do
+            echo "Executing $script..." | tee -a $LOG_FILE
+            snowflake-cli execute -f "$script" --connection default 2>> $LOG_FILE
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "Success: $script executed successfully" | tee -a $LOG_FILE
+              SUCCESS_SCRIPTS+=("$script")
+            else
+              echo "Error: $script failed with exit code $EXIT_CODE" | tee -a $LOG_FILE
+              FAILED_SCRIPTS+=("$script")
+            fi
           done
+
+          # Print summary
+          echo "Execution Summary" | tee -a $LOG_FILE
+          echo "Successful scripts: ${#SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
+          echo "${SUCCESS_SCRIPTS[@]}" | tee -a $LOG_FILE
+          echo "Failed scripts: ${#FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
+          echo "${FAILED_SCRIPTS[@]}" | tee -a $LOG_FILE
+
+          # Upload log file as artifact
+          echo "Uploading log file as artifact..."
+          mkdir -p artifacts
+          mv $LOG_FILE artifacts/
+
+          # Fail pipeline if any script failed
+          if [ ${#FAILED_SCRIPTS[@]} -gt 0 ]; then
+            echo "Error: One or more scripts failed. Check the log artifact for details."
+            exit 1
+          fi
+
+      # Step 6: Upload execution log
+      - name: Upload execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snowflake-execution-log
+          path: artifacts/
+
+      # Step 7: Clean up
+      - name: Clean up
+        if: always()
+        run: |
+          rm -f ~/.snowflake/config
