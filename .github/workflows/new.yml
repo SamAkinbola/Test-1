@@ -1,26 +1,36 @@
-name: Deploy Snowflake SQL Files
+name: Execute Snowflake SQL Files
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - Test
+      - Bola
     paths:
       - 'Database/'
       
-  workflow_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      # Step 1: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Download and extract SnowSQL
-        run: |
-          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2.15/snowsql-1.2.15-linux_x86_64.zip
-          unzip snowsql-1.2.15-linux_x86_64.zip -d snowsql
+      # Step 2: Set up Python
+      - name: Use Python 3.8.x
+        uses: actions/setup-python@v2.2.1
+        with:
+          python-version: 3.8.x
 
-      - name: Execute SQL files
+      # Step 3: Install Snowflake CLI
+      - uses: snowflakedb/snowflake-cli-action@v1.5
+        with:
+          cli-version: "latest"
+          default-config-file-path: "config.toml"
+
+      # Step 4: Configure Snowflake CLI
+      - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -30,6 +40,10 @@ jobs:
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
         run: |
-          for file in Database/*.sql; do
-            ./snowsql/snowsql -f "$file"
-          done
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          python --version
+          echo "Step 1: Installing snowflake"
+          pip install snowflake-cli
+          
+          echo "Step 2: Running schemachange"
+          snowflake-cli -f $GITHUB_WORKSPACE/Database -a $SF_ACCOUNT -u $SF_USERNAME -r $SF_ROLE -w $SF_WAREHOUSE -d $SF_DATABASE 
