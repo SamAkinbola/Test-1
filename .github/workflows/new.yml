@@ -24,10 +24,10 @@ jobs:
           python-version: 3.8.x
 
       # Step 3: Install Snowflake CLI
-      #- uses: snowflakedb/snowflake-cli-action@v1.5
-        #with:
-          #cli-version: "latest"
-          #default-config-file-path: "config.toml"
+      - uses: snowflakedb/snowflake-cli-action@v1.5
+        with:
+          cli-version: "latest"
+          default-config-file-path: "config.toml"
 
       # Step 4: Configure Snowflake CLI
       - name: Configure Snowflake CLI
@@ -42,8 +42,8 @@ jobs:
         run: |
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           python --version
-          echo "Step 1: Installing snowflake"
-          pip install snowflake-cli
+          #echo "Step 1: Installing snowflake"
+          #pip install snowflake-cli
           
-          echo "Step 2: Running schemachange"
+          echo "Step 2: Running snowflake"
           snowflake-cli -f $GITHUB_WORKSPACE/Database -a $SF_ACCOUNT -u $SF_USERNAME -r $SF_ROLE -w $SF_WAREHOUSE -d $SF_DATABASE 
