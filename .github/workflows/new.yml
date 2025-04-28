@@ -24,10 +24,10 @@ jobs:
           python-version: 3.8.x
 
       # Step 3: Install Snowflake CLI
-      - uses: snowflakedb/snowflake-cli-action@v1.5
-        with:
-          cli-version: "latest"
-          default-config-file-path: "config.toml"
+      #- uses: snowflakedb/snowflake-cli-action@v1.5
+        #with:
+          #cli-version: "latest"
+          #default-config-file-path: "config.toml"
 
       # Step 4: Configure Snowflake CLI
       - name: Configure Snowflake CLI
