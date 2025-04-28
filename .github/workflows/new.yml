@@ -38,19 +38,19 @@ jobs:
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-        run: |
-          if [[ -z "$SNOWFLAKE_ACCOUNT" || -z "$SNOWFLAKE_USER" || -z "$SNOWFLAKE_PASSWORD" ]]; then
-            echo "Error: Missing required Snowflake credentials"
-            exit 1
-          fi
-          echo "[connections.default]" > ~/.snowflake/config
-          echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
-          echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
-          echo "password = $SNOWFLAKE_PASSWORD" >> ~/.snowflake/config
-          echo "role = $SNOWFLAKE_ROLE" >> ~/.snowflake/config
-          echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
-          echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
-          echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
+        #run: |
+          #if [[ -z "$SNOWFLAKE_ACCOUNT" || -z "$SNOWFLAKE_USER" || -z "$SNOWFLAKE_PASSWORD" ]]; then
+            #echo "Error: Missing required Snowflake credentials"
+            #exit 1
+          #fi
+          #echo "[connections.default]" > ~/.snowflake/config
+          #echo "account = $SNOWFLAKE_ACCOUNT" >> ~/.snowflake/config
+          #echo "user = $SNOWFLAKE_USER" >> ~/.snowflake/config
+          #echo "password = $SNOWFLAKE_PASSWORD" >> ~/.snowflake/config
+          #echo "role = $SNOWFLAKE_ROLE" >> ~/.snowflake/config
+          #echo "warehouse = $SNOWFLAKE_WAREHOUSE" >> ~/.snowflake/config
+          #echo "database = $SNOWFLAKE_DATABASE" >> ~/.snowflake/config
+          #echo "schema = $SNOWFLAKE_SCHEMA" >> ~/.snowflake/config
 
       # Step 5: Execute Snowflake SQL scripts with error handling
       - name: Execute Snowflake Scripts
