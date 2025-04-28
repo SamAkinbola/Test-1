@@ -44,7 +44,7 @@ jobs:
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           python --version
           echo "Running Snowflake CLI"
-          echo "PATH: $PATH"
+          #echo "PATH: $PATH"
           which snowflake
           snowflake --version
           # Test Snowflake connection
