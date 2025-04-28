@@ -1,4 +1,4 @@
-name: Snowflake Deployment Pipeline 
+name: Snowflake Deployment Pipeline
 
 on:
   workflow_dispatch:
@@ -45,18 +45,19 @@ jobs:
           echo "snow_version_pip=$(cat version_output.txt)" >> $GITHUB_ENV
       # Step : Execute Snowflake Files
       - name: Execute Snowflake SQL Files
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }} # Set password as environment variable
         run: |
           for file in Database/*.sql; do
             if [ -f "$file" ]; then
               echo "Executing $file..."
               snow sql -f "$file" \
-                --account "${{ env.SNOWFLAKE_ACCOUNT }}" \
+                --accountname "${{ env.SNOWFLAKE_ACCOUNT }}" \
                 --username "${{ env.SNOWFLAKE_USER }}" \
-                --password "${{ env.SNOWFLAKE_PASSWORD }}" \
-                --role "${{ env.SNOWFLAKE_ROLE }}" \
-                --warehouse "${{ env.SNOWFLAKE_WAREHOUSE }}" \
-                --database "${{ env.SNOWFLAKE_DATABASE }}" \
-                --schema "${{ env.SNOWFLAKE_SCHEMA }}"
+                --rolename "${{ env.SNOWFLAKE_ROLE }}" \
+                --warehousename "${{ env.SNOWFLAKE_WAREHOUSE }}" \
+                --dbname "${{ env.SNOWFLAKE_DATABASE }}" \
+                --schemaname "${{ env.SNOWFLAKE_SCHEMA }}"
             else
               echo "No SQL files found in Database/ folder."
             fi
