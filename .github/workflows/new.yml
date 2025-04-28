@@ -25,14 +25,53 @@ jobs:
 
       
 
-      
-
       # Step 5: List Repository Contents
       - name: List Repository Contents
         run: |
           echo "Repository contents:"
           ls -R $GITHUB_WORKSPACE
-
+      # Step 7: Configure and Run Snowflake CLI
+      - name: Configure Snowflake CLI
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        run: |
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          python --version
+          echo "Running Snowflake CLI"
+          echo "PATH: $PATH"
+          which snowflake
+          snowflake --version
+          # Test Snowflake connection
+          echo "Testing Snowflake connection"
+          snowflake sql -c default -q "SELECT CURRENT_VERSION();" \
+            --account $SNOWFLAKE_ACCOUNT \
+            --user $SNOWFLAKE_USER \
+            --password $SNOWFLAKE_PASSWORD \
+            --role $SNOWFLAKE_ROLE \
+            --warehouse $SNOWFLAKE_WAREHOUSE \
+            --database $SNOWFLAKE_DATABASE \
+            --schema $SNOWFLAKE_SCHEMA || { echo "Snowflake connection failed"; exit 1; }
+          # Check if SQL files exist
+          echo "Listing SQL files in $GITHUB_WORKSPACE/Database/"
+          ls -l $GITHUB_WORKSPACE/Database/*.sql || { echo "No SQL files found"; exit 1; }
+          # Execute SQL files
+          for file in $GITHUB_WORKSPACE/Database/*.sql; do
+            echo "Executing SQL file: $file"
+            snowflake sql -c default -f "$file" \
+              --account $SNOWFLAKE_ACCOUNT \
+              --user $SNOWFLAKE_USER \
+              --password $SNOWFLAKE_PASSWORD \
+              --role $SNOWFLAKE_ROLE \
+              --warehouse $SNOWFLAKE_WAREHOUSE \
+              --database $SNOWFLAKE_DATABASE \
+              --schema $SNOWFLAKE_SCHEMA || { echo "Error executing $file"; exit 1; }
+          done
       # Step 6: Debug Secrets
       - name: Debug Secrets
         env:
