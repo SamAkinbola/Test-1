@@ -88,7 +88,7 @@ jobs:
               echo "Environment Variables for Substitution:"
               env | grep -v "SNOWFLAKE_PASSWORD" | grep -v "SNOWSQL_PWD" || echo "No relevant environment variables set"
               echo "Validating SQL syntax..."
-              snow sql --dry-run -f "$file" --connection temp_connection 2>&1 | tee validation.log
+              python validate_sql.py "$file" 2>&1 | tee validation.log
               if [ $? -ne 0 ]; then
                 echo "Syntax validation failed for $file"
                 cat validation.log
