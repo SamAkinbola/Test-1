@@ -10,7 +10,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       # Step 1: Checkout repository
@@ -28,13 +28,40 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install snowflake-cli-labs==2.8.1
-          # Ensure the pip-installed binaries are in PATH
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-          # Verify installation
           which snowflake
           snowflake --version
 
-      # Step 4: Configure and Run Snowflake CLI
+      # Step 4: Debug PATH
+      - name: Debug PATH
+        run: |
+          echo "PATH: $PATH"
+          ls -l $HOME/.local/bin
+
+      # Step 5: List Repository Contents
+      - name: List Repository Contents
+        run: |
+          echo "Repository contents:"
+          ls -R $GITHUB_WORKSPACE
+
+      # Step 6: Debug Secrets
+      - name: Debug Secrets
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+        run: |
+          echo "SNOWFLAKE_ACCOUNT is set: ${SNOWFLAKE_ACCOUNT:+set}"
+          echo "SNOWFLAKE_USER is set: ${SNOWFLAKE_USER:+set}"
+          echo "SNOWFLAKE_ROLE is set: ${SNOWFLAKE_ROLE:+set}"
+          echo "SNOWFLAKE_WAREHOUSE is set: ${SNOWFLAKE_WAREHOUSE:+set}"
+          echo "SNOWFLAKE_DATABASE is set: ${SNOWFLAKE_DATABASE:+set}"
+          echo "SNOWFLAKE_SCHEMA is set: ${SNOWFLAKE_SCHEMA:+set}"
+
+      # Step 7: Configure and Run Snowflake CLI
       - name: Configure Snowflake CLI
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -48,7 +75,6 @@ jobs:
           echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
           python --version
           echo "Running Snowflake CLI"
-          # Debug: Print PATH and check snowflake command
           echo "PATH: $PATH"
           which snowflake
           snowflake --version
@@ -65,20 +91,15 @@ jobs:
           # Check if SQL files exist
           echo "Listing SQL files in $GITHUB_WORKSPACE/Database/"
           ls -l $GITHUB_WORKSPACE/Database/*.sql || { echo "No SQL files found"; exit 1; }
-          # Execute SQL files with error handling
+          # Execute SQL files
           for file in $GITHUB_WORKSPACE/Database/*.sql; do
-            if [ -f "$file" ]; then
-              echo "Executing SQL file: $file"
-              snowflake sql -c default -f "$file" \
-                --account $SNOWFLAKE_ACCOUNT \
-                --user $SNOWFLAKE_USER \
-                --password $SNOWFLAKE_PASSWORD \
-                --role $SNOWFLAKE_ROLE \
-                --warehouse $SNOWFLAKE_WAREHOUSE \
-                --database $SNOWFLAKE_DATABASE \
-                --schema $SNOWFLAKE_SCHEMA || { echo "Error executing $file"; exit 1; }
-            else
-              echo "No SQL files found in $GITHUB_WORKSPACE/Database/"
-              exit 1
-            fi
+            echo "Executing SQL file: $file"
+            snowflake sql -c default -f "$file" \
+              --account $SNOWFLAKE_ACCOUNT \
+              --user $SNOWFLAKE_USER \
+              --password $SNOWFLAKE_PASSWORD \
+              --role $SNOWFLAKE_ROLE \
+              --warehouse $SNOWFLAKE_WAREHOUSE \
+              --database $SNOWFLAKE_DATABASE \
+              --schema $SNOWFLAKE_SCHEMA || { echo "Error executing $file"; exit 1; }
           done
