@@ -1,35 +1,63 @@
-name: Deploy Snowflake SQL Files
+name: test-compare-versions-pip-and-pipx
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - Test
-    paths:
-      - 'Database/'
-      
-  workflow_dispatch:
+      - Bola
+    #paths:
+      #- 'Database/'
+
 jobs:
+
   deploy:
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+    
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+    name: Install Snowflake CLI with pipx first and then with pip
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - uses: snowflakedb/snowflake-cli-action@v1.5
+      - uses: actions/checkout@v4
         with:
-          default-config-file-path: "config.toml"
+          persist-credentials: false
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-      - name: Execute SQL files
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      - name: Install Snowflake CLI with pip
         run: |
-          for file in Database/*.sql; do
-            ./snowsql/snowsql -f "$file"
-          done
+            python -m pip install snowflake-cli
+    
+      - name: Store snow version
+        shell: bash
+        run: |
+            snow --version >> version_output.txt
+            echo "snow_version_pip=$(cat version_output.txt)" >> $GITHUB_ENV
+
+      - name: Install Snowflake CLI with pipx
+        uses: ./ 
+        id: setup_snowcli
+          
+      - name: Compare pipx and pip versions
+        shell: bash
+        run: |
+            snow_version_pipx=$(snow --version)
+            snow_version_pip="${{ env.snow_version_pip }}"
+
+            if [ "$snow_version_pipx" == "$snow_version_pip" ]; then
+                echo "The versions match: $snow_version_pipx"
+            else
+                echo "The versions do not match: pipx version is $snow_version_pipx, but expected version is $snow_version_pip"
+                exit 1
+            fi
