@@ -23,14 +23,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Step 3: Install Snowflake CLI
-      - name: Install Snowflake CLI
-        run: |
-          python -m pip install --upgrade pip
-          pip install snowflake-cli-labs==2.8.1
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          which snowflake
-          snowflake --version
+      
 
       # Step 4: Debug PATH
       - name: Debug PATH
@@ -60,7 +53,14 @@ jobs:
           echo "SNOWFLAKE_WAREHOUSE is set: ${SNOWFLAKE_WAREHOUSE:+set}"
           echo "SNOWFLAKE_DATABASE is set: ${SNOWFLAKE_DATABASE:+set}"
           echo "SNOWFLAKE_SCHEMA is set: ${SNOWFLAKE_SCHEMA:+set}"
-
+      # Step 3: Install Snowflake CLI
+      - name: Install Snowflake CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install snowflake-cli-labs==2.8.1
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          which snowflake
+          snowflake --version
       # Step 7: Configure and Run Snowflake CLI
       - name: Configure Snowflake CLI
         env:
