@@ -15,10 +15,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Download and extract SnowSQL
+      - name: Download SnowSQL
         run: |
-          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2.15/snowsql-1.2.15-linux_x86_64.zip
-          unzip snowsql-1.2.15-linux_x86_64.zip -d snowsql
+          # Set the SnowSQL version (update to the latest from Snowflake docs)
+          SNOWSQL_VERSION="1.2.23"
+          SNOWSQL_URL="https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/${SNOWSQL_VERSION}/snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip"
+          # Download with error handling and redirect support
+          curl --fail --location -O "$SNOWSQL_URL"
+          # Check if the file exists after download
+          if [ ! -f "snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip" ]; then
+            echo "Error: Download failed - file not found"
+            exit 1
+          fi
+
+      - name: Verify and Extract SnowSQL
+        run: |
+          SNOWSQL_VERSION="1.2.23"  # Must match the version above
+          # Test ZIP file integrity
+          unzip -t "snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip" || { echo "Error: Invalid or corrupted ZIP file"; exit 1; }
+          # Extract the ZIP file
+          unzip "snowsql-${SNOWSQL_VERSION}-linux_x86_64.zip" -d snowsql
+
 
       - name: Execute SQL files
         env:
