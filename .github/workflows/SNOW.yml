@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # Specify Ubuntu 22.04 for consistency
 
     env:
       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -21,11 +21,21 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install OpenSSL Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev openssl
+
+      - name: Debug OpenSSL Version
+        run: |
+          openssl version
+          ls -l /usr/lib/x86_64-linux-gnu/libcrypto*
+
       - name: Install SnowSQL
         run: |
           curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
           SNOWSQL_DEST=~/bin SNOWSQL_LOGIN_SHELL=~/.profile bash snowsql-1.2.9-linux_x86_64.bash
-      
+
       - name: Debug Environment Variables
         run: |
           echo "SNOWFLAKE_ACCOUNT: $SNOWFLAKE_ACCOUNT"
@@ -54,7 +64,7 @@ jobs:
           fi
           find "$SQL_DIR" -type f -name '*.sql' | sort | while read file; do
             echo "Executing $file..."
-            export SNOWSQL_PWD='${SNOWFLAKE_PASSWORD}'
+            export SNOWSQL_PWD="$SNOWFLAKE_PASSWORD"
             ~/bin/snowsql -a "$SNOWFLAKE_ACCOUNT" \
                           -u "$SNOWFLAKE_USER" \
                           -r "$SNOWFLAKE_ROLE" \
