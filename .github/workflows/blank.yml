@@ -1,5 +1,4 @@
 name: Snowflake Deployment Pipeline
-
 on:
   workflow_dispatch:
   push:
@@ -10,10 +9,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
+    runs-on: ubuntu-22.04 # Specify Ubuntu 22.04 for consistency
 
     env:
       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -25,78 +21,88 @@ jobs:
       SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
         with:
-          persist-credentials: false
+          fetch-depth: 2 # Fetch the current and previous commit to compare changes
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install Snowflake CLI with pip
+      - name: Install OpenSSL Dependencies
         run: |
-          python -m pip install snowflake-cli==3.7.1
-
-      - name: Verify Snowflake CLI Installation
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev openssl
+      - name: Debug OpenSSL Version
         run: |
-          snow --version
-
-      - name: Debug Connection Parameters
+          openssl version
+          ls -l /usr/lib/x86_64-linux-gnu/libcrypto*
+      - name: Install SnowSQL
         run: |
-          echo "Account: ${{ env.SNOWFLAKE_ACCOUNT }}"
-          echo "User: ${{ env.SNOWFLAKE_USER }}"
-          echo "Role: ${{ env.SNOWFLAKE_ROLE }}"
-          echo "Warehouse: ${{ env.SNOWFLAKE_WAREHOUSE }}"
-          echo "Database: ${{ env.SNOWFLAKE_DATABASE }}"
-          echo "Schema: ${{ env.SNOWFLAKE_SCHEMA }}"
-
-      - name: Test Snowflake Connection
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
+          SNOWSQL_DEST=/bin SNOWSQL_LOGIN_SHELL=/.profile bash snowsql-1.2.9-linux_x86_64.bash
+      - name: Debug Environment Variables
         run: |
-          mkdir -p ~/.snowflake
-          echo '[connections.temp_connection]' > ~/.snowflake/config.toml
-          echo 'account = "${{ env.SNOWFLAKE_ACCOUNT }}"' >> ~/.snowflake/config.toml
-          echo 'user = "${{ env.SNOWFLAKE_USER }}"' >> ~/.snowflake/config.toml
-          echo 'password = "${{ env.SNOWFLAKE_PASSWORD }}"' >> ~/.snowflake/config.toml
-          echo 'role = "${{ env.SNOWFLAKE_ROLE }}"' >> ~/.snowflake/config.toml
-          echo 'warehouse = "${{ env.SNOWFLAKE_WAREHOUSE }}"' >> ~/.snowflake/config.toml
-          echo 'database = "${{ env.SNOWFLAKE_DATABASE }}"' >> ~/.snowflake/config.toml
-          echo 'schema = "${{ env.SNOWFLAKE_SCHEMA }}"' >> ~/.snowflake/config.toml
-          echo 'authenticator = "password"' >> ~/.snowflake/config.toml
-          chmod 0600 ~/.snowflake/config.toml
-          echo "Config file content:"
-          sed 's/password = .*/password = [REDACTED]/' ~/.snowflake/config.toml
-          echo "SELECT CURRENT_VERSION();" > test.sql
-          snow sql -f test.sql --connection temp_connection 2>&1 | tee connection_output.log
-          if [ $? -ne 0 ]; then
-            echo "Connection test failed with error code $?"
-            cat connection_output.log
-            cat test.sql
+          echo "SNOWFLAKE_ACCOUNT: $SNOWFLAKE_ACCOUNT"
+          echo "SNOWFLAKE_USER: $SNOWFLAKE_USER"
+          echo "SNOWFLAKE_ROLE: $SNOWFLAKE_ROLE"
+          echo "SNOWFLAKE_WAREHOUSE: $SNOWFLAKE_WAREHOUSE"
+          echo "SNOWFLAKE_DATABASE: $SNOWFLAKE_DATABASE"
+          echo "SNOWFLAKE_SCHEMA: $SNOWFLAKE_SCHEMA"
+      - name: Debug Secret Availability
+        run: |
+          if [ -z "$SNOWFLAKE_PASSWORD" ]; then
+            echo "SNOWFLAKE_PASSWORD is empty or unset"
             exit 1
-          fi
-        env:
-          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
-
-
-      - name: List SQL Files
-        run: |
-          ls -l Database/*.sql || echo "No SQL files found"
-
-      - name: Execute Snowflake SQL Files
-        run: |
-          if ls Database/*.sql >/dev/null 2>&1; then
-            for file in Database/*.sql; do
-              echo "Executing $file..."
-              snow sql -f "$file" \
-                --connection temp_connection \
-                -o variable_substitution=true 2>&1 | tee output.log
-              if [ $? -ne 0 ]; then
-                echo "Error executing $file"
-                cat output.log
-                exit 1
-              fi
-            done
           else
-            echo "No SQL files found in Database/ folder."
+            echo "SNOWFLAKE_PASSWORD is set (value not shown for security)"
           fi
+      - name: Identify Changed SQL Files
+        id: changed_files
+        run: |
+          echo "Identifying changed SQL files"
+          SQL_DIR="Database"
+          if [ ! -d "$SQL_DIR" ]; then
+            echo "SQL directory $SQL_DIR does not exist. Skipping deployment."
+            exit 0
+          fi
+          # Get list of changed SQL files (added or modified) in the Database/ directory
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM HEAD^ HEAD "$SQL_DIR" | grep '\.sql$' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No new or modified SQL files found. Skipping deployment."
+            exit 0
+          fi
+          # Store the changed files in an output variable
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Deploy Changed SQL Files to Snowflake
+        if: steps.changed_files.outputs.changed_files != ''
+        run: |
+          echo "Deploying changed SQL files"
+          SQL_DIR="Database"
+          # Read changed files from the output
+          CHANGED_FILES="${{ steps.changed_files.outputs.changed_files }}"
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No SQL files to deploy."
+            exit 0
+          fi
+          # Loop through changed SQL files and execute them
+          echo "$CHANGED_FILES" | while read file; do
+            if [ -f "$file" ]; then
+              echo "Executing $file..."
+              export SNOWSQL_PWD="$SNOWFLAKE_PASSWORD"
+              ~/bin/snowsql -a "$SNOWFLAKE_ACCOUNT" \
+                            -u "$SNOWFLAKE_USER" \
+                            -r "$SNOWFLAKE_ROLE" \
+                            -w "$SNOWFLAKE_WAREHOUSE" \
+                            -d "$SNOWFLAKE_DATABASE" \
+                            -s "$SNOWFLAKE_SCHEMA" \
+                            -f "$file" \
+                            -o friendly=false \
+                            -o log_level=DEBUG || {
+                echo "Failed executing $file"
+                exit 1
+              }
+            else
+              echo "File $file does not exist. Skipping."
+            fi
+          done
         env:
-          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
+          changed_files: ${{ steps.changed_files.outputs.changed_files }}
