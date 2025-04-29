@@ -34,7 +34,14 @@ jobs:
           echo "SNOWFLAKE_WAREHOUSE: $SNOWFLAKE_WAREHOUSE"
           echo "SNOWFLAKE_DATABASE: $SNOWFLAKE_DATABASE"
           echo "SNOWFLAKE_SCHEMA: $SNOWFLAKE_SCHEMA"
-
+      - name: Debug Secret Availability
+        run: |
+          if [ -z "$SNOWFLAKE_PASSWORD" ]; then
+            echo "SNOWFLAKE_PASSWORD is empty or unset"
+            exit 1
+          else
+            echo "SNOWFLAKE_PASSWORD is set (value not shown for security)"
+          fi
       - name: Deploy SQL Files to Snowflake
         run: |
           echo "Deploying SQL files for tag: ${{ github.ref_name }}"
