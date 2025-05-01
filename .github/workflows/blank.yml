@@ -1,7 +1,7 @@
 name: Snowflake Deployment Pipeline
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches:
       - main
     paths:
