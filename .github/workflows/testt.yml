@@ -118,10 +118,7 @@ jobs:
               -d ${{ secrets.SF_DW_PROD_TEST_DB }} \
               -r ${{ secrets.SF_DW_PROD_TEST_ROLE }} \
               -w ${{ secrets.SF_DW_PROD_TEST_WH }} \
-              -o log_level=DEBUG || {
-                  echo "Failed executing $file"
-                  exit 1
-              }
+              
             DEPLOYED_LIST="$DEPLOYED_LIST\n$file"
           else
             echo "File $file does not exist. Skipping."
