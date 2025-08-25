@@ -1,0 +1,151 @@
+# This workflow runs deployments to Snowflake when a new tag is pushed
+# It ensures that:
+#   1. The tag was created from the prod branch
+#   2. Only SQL files inside the Database/ folder are deployed
+#   3. Only files changed since the previous tag are executed
+#   4. A summary of deployed files is shown in the job summary
+
+name: RUBIX_PROD_TEST
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow only on push of tags starting with "v"
+  push:
+    tags:
+      - "v*"   # Example: v1.0, v2.3.4
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+    # Step 1: Checkout the code repository with full history
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0   # Required to check commit history and tags
+
+    # Step 2: Ensure the tag was created from the prod branch
+    - name: Ensure tag is from prod branch
+      id: branch_check
+      run: |
+        COMMIT_SHA=${{ github.sha }}
+        if git branch -r --contains "$COMMIT_SHA" | grep -q "origin/prod"; then
+          echo "on_prod=true" >> $GITHUB_OUTPUT
+        else
+          echo "on_prod=false" >> $GITHUB_OUTPUT
+        fi
+
+    # Step 3: Stop workflow if the tag was not created from prod
+    - name: Stop if not from prod branch
+      if: steps.branch_check.outputs.on_prod != 'true'
+      run: |
+        echo "❌ Tag was not created from prod branch. Skipping workflow."
+        exit 0
+
+    # Step 4: Install SnowSQL client
+    - name: Install SnowSQL
+      if: steps.branch_check.outputs.on_prod == 'true'
+      env:
+        SNOWSQL_PRIVATE_KEY_PASSPHRASE: "${{ secrets.SF_DW_PROD_TEST_PRIVATE_KEY_PWD }}"
+      run: |
+        curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.3/linux_x86_64/snowsql-1.3.2-linux_x86_64.bash
+        SNOWSQL_DEST=~/bin SNOWSQL_LOGIN_SHELL=~/.profile bash snowsql-1.3.2-linux_x86_64.bash
+
+    # Step 5: Prepare private key for Snowflake authentication
+    - name: Prepare user private key
+      if: steps.branch_check.outputs.on_prod == 'true'
+      run: |
+        printf '%s\n' "${{ secrets.SF_DW_PROD_TEST_USER_PRIVATE_KEY }}" > ./private_key.pem
+
+    # Step 6: Identify changed SQL files under Database/ since the previous tag
+    - name: Identify Changed SQL Files
+      if: steps.branch_check.outputs.on_prod == 'true'
+      id: changed_files
+      run: |
+        echo "Identifying changed SQL files"
+
+        SQL_DIR="Database"
+        if [ ! -d "$SQL_DIR" ]; then
+          echo "SQL directory $SQL_DIR does not exist. Skipping deployment."
+          exit 0
+        fi
+
+        # Find the previous tag (before the current one)
+        PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.sha }}^ 2>/dev/null || true)
+
+        if [ -z "$PREV_TAG" ]; then
+          echo "No previous tag found. Checking changes only in the current commit."
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM HEAD^ HEAD "$SQL_DIR" | grep -i '\.sql$' || true)
+        else
+          echo "Previous tag: $PREV_TAG"
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM "$PREV_TAG" ${{ github.sha }} "$SQL_DIR" | grep -i '\.sql$' || true)
+        fi
+
+        if [ -z "$CHANGED_FILES" ]; then
+          echo "No new or modified SQL files found. Skipping deployment."
+          exit 0
+        fi
+
+        # Store the changed files in an output variable
+        echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    # Step 7: Deploy the changed SQL files to Snowflake
+    - name: Deploy Changed SQL Files to Snowflake
+      if: steps.changed_files.outputs.changed_files != ''
+      run: |
+        echo "Deploying changed SQL files"
+        CHANGED_FILES="${{ steps.changed_files.outputs.changed_files }}"
+
+        DEPLOYED_LIST=""
+        echo "$CHANGED_FILES" | while read file; do
+          if [ -f "$file" ]; then
+            echo "Executing $file..."
+            ~/bin/snowsql \
+              -a ${{ secrets.SF_DW_PROD_TEST_ACCOUNT }} \
+              -u ${{ secrets.SF_DW_PROD_TEST_USER }} \
+              --private-key-path ./private_key.pem \
+              -f "$file" \
+              -d ${{ secrets.SF_DW_PROD_TEST_DB }} \
+              -r ${{ secrets.SF_DW_PROD_TEST_ROLE }} \
+              -w ${{ secrets.SF_DW_PROD_TEST_WH }} \
+              -o log_level=DEBUG || {
+                  echo "Failed executing $file"
+                  exit 1
+              }
+            DEPLOYED_LIST="$DEPLOYED_LIST\n$file"
+          else
+            echo "File $file does not exist. Skipping."
+          fi
+        done
+
+        # Save list of deployed files for summary step
+        echo "deployed_files<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$DEPLOYED_LIST" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    # Step 8: Add summary of deployment to job summary
+    - name: Deployment Summary
+      if: steps.changed_files.outputs.changed_files != ''
+      run: |
+        echo "## ✅ Snowflake Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** prod" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployed SQL Files" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.deploy-changed-sql-files.outputs.deployed_files }}" | while read file; do
+          if [ -n "$file" ]; then
+            echo "- $file" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
