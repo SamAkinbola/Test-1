@@ -1,0 +1,32 @@
+- name: Execute Snowflake SQL Files
+  run: |
+    if ls Database/*.sql >/dev/null 2>&1; then
+      for file in Database/*.sql; do
+        echo "Processing $file..."
+        echo "=== SQL File Content ==="
+        cat "$file"
+        echo "=== End SQL File Content ==="
+        echo "Environment Variables for Substitution:"
+        env | grep -v "SNOWFLAKE_PASSWORD" | grep -v "SNOWSQL_PWD" || echo "No relevant environment variables set"
+        echo "Validating SQL syntax..."
+        python validate_sql.py "$file" 2>&1 | tee validation.log
+        if [ $? -ne 0 ]; then
+          echo "Syntax validation failed for $file"
+          cat validation.log
+          exit 1
+        fi
+        echo "Executing $file..."
+        snow sql -f "$file" \
+          --connection temp_connection \
+          --debug 2>&1 | tee output.log
+        if [ $? -ne 0 ]; then
+          echo "Error executing $file"
+          cat output.log
+          exit 1
+        fi
+      done
+    else
+      echo "No SQL files found in Database/ folder."
+    fi
+  env:
+    SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}

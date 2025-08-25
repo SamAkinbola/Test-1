@@ -1,0 +1,109 @@
+name: Snowflake Deployment Pipeline
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "Database/"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04 # Specify Ubuntu 22.04 for consistency
+
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2 # Fetch the current and previous commit to compare changes
+
+      - name: Install OpenSSL Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev openssl
+      - name: Debug OpenSSL Version
+        run: |
+          openssl version
+          ls -l /usr/lib/x86_64-linux-gnu/libcrypto*
+      - name: Install SnowSQL
+        run: |
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.2/linux_x86_64/snowsql-1.2.9-linux_x86_64.bash
+          SNOWSQL_DEST=~/bin SNOWSQL_LOGIN_SHELL=~/.profile bash snowsql-1.2.9-linux_x86_64.bash
+
+      - name: Debug Environment Variables
+        run: |
+          echo "SNOWFLAKE_ACCOUNT: $SNOWFLAKE_ACCOUNT"
+          echo "SNOWFLAKE_USER: $SNOWFLAKE_USER"
+          echo "SNOWFLAKE_ROLE: $SNOWFLAKE_ROLE"
+          echo "SNOWFLAKE_WAREHOUSE: $SNOWFLAKE_WAREHOUSE"
+          echo "SNOWFLAKE_DATABASE: $SNOWFLAKE_DATABASE"
+          echo "SNOWFLAKE_SCHEMA: $SNOWFLAKE_SCHEMA"
+      - name: Debug Secret Availability
+        run: |
+          if [ -z "$SNOWFLAKE_PASSWORD" ]; then
+            echo "SNOWFLAKE_PASSWORD is empty or unset"
+            exit 1
+          else
+            echo "SNOWFLAKE_PASSWORD is set (value not shown for security)"
+          fi
+      - name: Identify Changed SQL Files
+        id: changed_files
+        run: |
+          echo "Identifying changed SQL files"
+          SQL_DIR="Database"
+          if [ ! -d "$SQL_DIR" ]; then
+            echo "SQL directory $SQL_DIR does not exist. Skipping deployment."
+            exit 0
+          fi
+          # Get list of changed SQL files (added or modified) in the Database/ directory
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM HEAD^ HEAD "$SQL_DIR" | grep '\.sql$' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No new or modified SQL files found. Skipping deployment."
+            exit 0
+          fi
+          # Store the changed files in an output variable
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Deploy Changed SQL Files to Snowflake
+        if: steps.changed_files.outputs.changed_files != ''
+        run: |
+          echo "Deploying changed SQL files"
+          SQL_DIR="Database"
+          # Read changed files from the output
+          CHANGED_FILES="${{ steps.changed_files.outputs.changed_files }}"
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No SQL files to deploy."
+            exit 0
+          fi
+          # Loop through changed SQL files and execute them
+          echo "$CHANGED_FILES" | while read file; do
+            if [ -f "$file" ]; then
+              echo "Executing $file..."
+              export SNOWSQL_PWD="$SNOWFLAKE_PASSWORD"
+              ~/bin/snowsql -a "$SNOWFLAKE_ACCOUNT" \
+                            -u "$SNOWFLAKE_USER" \
+                            -r "$SNOWFLAKE_ROLE" \
+                            -w "$SNOWFLAKE_WAREHOUSE" \
+                            -d "$SNOWFLAKE_DATABASE" \
+                            -s "$SNOWFLAKE_SCHEMA" \
+                            -f "$file" \
+                            -o friendly=false \
+                            -o log_level=DEBUG || {
+                echo "Failed executing $file"
+                exit 1
+              }
+            else
+              echo "File $file does not exist. Skipping."
+            fi
+          done
+        env:
+          changed_files: ${{ steps.changed_files.outputs.changed_files }}

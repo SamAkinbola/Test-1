@@ -1,0 +1,83 @@
+name: Snowflake Deployment Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - Bola
+    paths:
+      - "Database/"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Snowflake CLI with pip
+        run: |
+          python -m pip install snowflake-cli==3.7.1
+
+      - name: Verify Snowflake CLI Installation
+        run: |
+          snow --version
+
+      - name: Test Snowflake Connection
+        run: |
+          # Create a temporary config file
+          mkdir -p ~/.snowflake
+          cat <<EOF > ~/.snowflake/config.toml
+          [connections.temp_connection]
+          account = "${{ env.SNOWFLAKE_ACCOUNT }}"
+          user = "${{ env.SNOWFLAKE_USER }}"
+          password = "${{ env.SNOWFLAKE_PASSWORD }}"
+          role = "${{ env.SNOWFLAKE_ROLE }}"
+          warehouse = "${{ env.SNOWFLAKE_WAREHOUSE }}"
+          database = "${{ env.SNOWFLAKE_DATABASE }}"
+          schema = "${{ env.SNOWFLAKE_SCHEMA }}"
+          authenticator = "password"
+          EOF
+          # Set correct permissions on config.toml
+          chmod 0600 ~/.snowflake/config.toml
+          # Test the connection
+          snow connection test --connection temp_connection
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
+
+      - name: List SQL Files
+        run: |
+          ls -l Database/*.sql || echo "No SQL files found"
+
+      - name: Execute Snowflake SQL Files
+        run: |
+          for file in Database/*.sql; do
+            if [ -f "$file" ]; then
+              echo "Executing $file..."
+              snow sql -f "$file" \
+                --connection temp_connection \
+                -o variable_substitution=true
+            else
+              echo "No SQL files found in Database/ folder."
+            fi
+          done
+        env:
+          SNOWSQL_PWD: ${{ env.SNOWFLAKE_PASSWORD }}
