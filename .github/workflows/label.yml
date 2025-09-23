@@ -2,7 +2,7 @@ name: RUBIX_PROD_TEST
 
 on:
   pull_request:
-    types: [labeled, synchronize]
+    types: [labeled]
     paths:
       - 'Database/**'
 
