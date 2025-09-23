@@ -2,7 +2,7 @@ name: RUBIX_PROD_TEST
 
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
     paths:
       - 'Database/**'
 
@@ -119,16 +119,8 @@ jobs:
             fi
           } >> $GITHUB_STEP_SUMMARY
 
-      # Step 7a: Save commit SHA to file
-      - name: Save last deployed commit to file
+      # Step 7: Save current commit SHA for next run
+      - name: Save last deployed commit
         if: success()
         run: |
           echo "${{ github.event.pull_request.head.sha }}" > .last_deploy_commit
-
-      # Step 7b: Cache commit SHA file (per PR)
-      - name: Cache last deployed commit
-        if: success()
-        uses: actions/cache/save@v3
-        with:
-          path: .last_deploy_commit
-          key: deploy-commit-pr-${{ github.event.pull_request.number }}
