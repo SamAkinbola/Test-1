@@ -18,13 +18,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Step 2: Restore last deployed commit SHA (if any)
+      # Step 2: Restore last deployed commit (per PR)
       - name: Restore last deployed commit
         id: last_commit
         uses: actions/cache@v3
         with:
           path: .last_deploy_commit
-          key: deploy-commit-${{ github.event.pull_request.head.repo.full_name }}
+          key: deploy-commit-pr-${{ github.event.pull_request.number }}
 
       - name: Read last commit SHA
         id: read_last
@@ -89,7 +89,15 @@ jobs:
           echo "$CHANGED_FILES" | while read -r file; do
             if [ -f "$file" ]; then
               echo "Executing $file..."
-              if ~/bin/snowsql -a ${{ secrets.SF_DW_PROD_TEST_ACCOUNT }} -u ${{ secrets.SF_DW_PROD_TEST_USER }} --private-key-path ./private_key.pem -f "$file" -d ${{ secrets.SF_DW_PROD_TEST_DB }} -r ${{ secrets.SF_DW_PROD_TEST_ROLE }} -w ${{ secrets.SF_DW_PROD_TEST_WH }} -o log_level=DEBUG; then
+              if ~/bin/snowsql \
+                  -a ${{ secrets.SF_DW_PROD_TEST_ACCOUNT }} \
+                  -u ${{ secrets.SF_DW_PROD_TEST_USER }} \
+                  --private-key-path ./private_key.pem \
+                  -f "$file" \
+                  -d ${{ secrets.SF_DW_PROD_TEST_DB }} \
+                  -r ${{ secrets.SF_DW_PROD_TEST_ROLE }} \
+                  -w ${{ secrets.SF_DW_PROD_TEST_WH }} \
+                  -o log_level=DEBUG; then
                 DEPLOYED_FILES="$DEPLOYED_FILES\n$file"
               else
                 FAILED_FILES="$FAILED_FILES\n$file"
@@ -111,12 +119,16 @@ jobs:
             fi
           } >> $GITHUB_STEP_SUMMARY
 
-      # Step 7: Save current commit SHA as last deployed (only if successful)
-      - name: Save last deployed commit
+      # Step 7a: Save commit SHA to file
+      - name: Save last deployed commit to file
         if: success()
         run: |
           echo "${{ github.event.pull_request.head.sha }}" > .last_deploy_commit
+
+      # Step 7b: Cache commit SHA file (per PR)
+      - name: Cache last deployed commit
+        if: success()
         uses: actions/cache/save@v3
         with:
           path: .last_deploy_commit
-          key: deploy-commit-${{ github.event.pull_request.head.repo.full_name }}
+          key: deploy-commit-pr-${{ github.event.pull_request.number }}
