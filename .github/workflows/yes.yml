@@ -4,27 +4,28 @@ on:
   pull_request:
     types: [labeled]
     paths:
-      - 'Database/**'
+      - 'Database/'
+  workflow_dispatch:  # Added for manual triggering
 
 jobs:
   deploy:
-    if: contains(github.event.pull_request.labels.*.name, 'snowflake')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'bug')  # Updated condition
     runs-on: ubuntu-latest
 
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # Step 2: Restore last deployed commit (per PR)
       - name: Restore last deployed commit
         id: last_commit
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .last_deploy_commit
-          key: deploy-commit-pr-${{ github.event.pull_request.number }}
+          key: deploy-commit-pr-${{ github.event.pull_request.number || github.run_id }}  # Adjusted for workflow_dispatch
 
       - name: Read last commit SHA
         id: read_last
@@ -32,7 +33,7 @@ jobs:
           if [ -f .last_deploy_commit ]; then
             LAST_COMMIT=$(cat .last_deploy_commit)
           else
-            LAST_COMMIT=${{ github.event.pull_request.base.sha }}
+            LAST_COMMIT=${{ github.event.pull_request.base.sha || github.sha }}  # Adjusted for workflow_dispatch
           fi
           echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
 
@@ -44,7 +45,7 @@ jobs:
           SQL_DIR="Database"
 
           BASE_SHA="${{ steps.read_last.outputs.last_commit }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"  # Adjusted for workflow_dispatch
 
           echo "Comparing commits $BASE_SHA..$HEAD_SHA"
 
@@ -96,31 +97,4 @@ jobs:
                   -f "$file" \
                   -d ${{ secrets.SF_DW_PROD_TEST_DB }} \
                   -r ${{ secrets.SF_DW_PROD_TEST_ROLE }} \
-                  -w ${{ secrets.SF_DW_PROD_TEST_WH }} \
-                  -o log_level=DEBUG; then
-                DEPLOYED_FILES="$DEPLOYED_FILES\n$file"
-              else
-                FAILED_FILES="$FAILED_FILES\n$file"
-              fi
-            else
-              echo "File $file does not exist. Skipping."
-            fi
-          done
-
-          {
-            echo "### Deployment Summary"
-            if [ -n "$DEPLOYED_FILES" ]; then
-              echo "✅ Successfully deployed:"
-              echo "$DEPLOYED_FILES"
-            fi
-            if [ -n "$FAILED_FILES" ]; then
-              echo "❌ Failed deployments:"
-              echo "$FAILED_FILES"
-            fi
-          } >> $GITHUB_STEP_SUMMARY
-
-      # Step 7: Save current commit SHA for next run
-      - name: Save last deployed commit
-        if: success()
-        run: |
-          echo "${{ github.event.pull_request.head.sha }}" > .last_deploy_commit
+                  -w ${{ secrets.S
