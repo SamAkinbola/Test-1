@@ -1,5 +1,5 @@
 
-CREATE OR REPLACE TABLE FINANCE.PUBLIC.Departmes (
+CREATE OR REPLACE TABLE FINANCE.PUBLIC.Departmenttts (
     EmployeeID INT PRIMARY KEY, -- Unique identifier for each employee
     FirstName VARCHAR(50),      -- Employee's first name
     LastName VARCHAR(50),       -- Employee's last name
