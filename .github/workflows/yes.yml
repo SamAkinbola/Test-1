@@ -9,9 +9,9 @@ on:
 
 jobs:
   deploy:
-    # ✅ Only enforce label condition for pull_request events
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'bug')
     runs-on: ubuntu-latest
+    # ✅ Only check label condition for pull_request events
+    if: contains(github.event.pull_request.labels.*.name, 'bug')
 
     steps:
       # Step 1: Checkout repository
