@@ -98,7 +98,7 @@ jobs:
                 -d "${{ secrets.SF_DW_PROD_TEST_DB }}" \
                 -r "${{ secrets.SF_DW_PROD_TEST_ROLE }}" \
                 -w "${{ secrets.SF_DW_PROD_TEST_WH }}" \
-                -o log_level=DEBUG; then
+                
                 DEPLOYED_FILES="$DEPLOYED_FILES\n$file"
               else
                 FAILED_FILES="$FAILED_FILES\n$file"
