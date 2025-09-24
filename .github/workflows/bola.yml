@@ -1,49 +1,127 @@
-name: Execute Snowflake SQL Files
+name: RUBIX_PROD_TEST
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - Bola
+  pull_request:
+    types: [labeled]
     paths:
       - 'Database/'
-      
+  workflow_dispatch:
+
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'bug')
     runs-on: ubuntu-latest
 
     steps:
       # Step 1: Checkout repository
       - name: Checkout code
-        uses: actions/checkout@v2
-
-      # Step 2: Set up Python
-      - name: Use Python 3.8.x
-        uses: actions/setup-python@v2.2.1
+        uses: actions/checkout@v4
         with:
-          python-version: 3.8.x
+          fetch-depth: 0
 
-      # Step 3: Install Snowflake CLI
-      - uses: snowflakedb/snowflake-cli-action@v1.5
+      # Step 2: Restore last deployed commit (per PR)
+      - name: Restore last deployed commit
+        id: last_commit
+        uses: actions/cache@v4
         with:
-          cli-version: "latest"
-          default-config-file-path: "config.toml"
+          path: .last_deploy_commit
+          key: deploy-commit-pr-${{ github.event.pull_request.number || github.run_id }}
 
-      # Step 4: Configure Snowflake CLI
-      - name: Configure Snowflake CLI
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-          SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      - name: Read last commit SHA
+        id: read_last
         run: |
-          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-          python --version
-          echo "Step 1: Installing snowflake"
-          pip install snowflake-cli
-          
-          echo "Step 2: Running schemachange"
-          snowflake-cli -f $GITHUB_WORKSPACE/Database -a $SF_ACCOUNT -u $SF_USERNAME -r $SF_ROLE -w $SF_WAREHOUSE -d $SF_DATABASE 
+          if [ -f .last_deploy_commit ]; then
+            LAST_COMMIT=$(cat .last_deploy_commit)
+          else
+            LAST_COMMIT=${{ github.event.pull_request.base.sha || github.sha }}
+          fi
+          echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
+
+      # Step 3: Identify Changed SQL Files since last deployed commit
+      - name: Identify Changed SQL Files
+        id: changed_files
+        run: |
+          echo "Identifying changed SQL files"
+          SQL_DIR="Database"
+
+          BASE_SHA="${{ steps.read_last.outputs.last_commit }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+
+          echo "Comparing commits $BASE_SHA..$HEAD_SHA"
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$SQL_DIR" | grep -i '\.sql$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No new or modified SQL files found in $SQL_DIR. Skipping deployment."
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Step 4: Install SnowSQL client
+      - name: Install SnowSQL
+        env:
+          SNOWSQL_PRIVATE_KEY_PASSPHRASE: ${{ secrets.SF_DW_PROD_TEST_PRIVATE_KEY_PWD }}
+        run: |
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.3/linux_x86_64/snowsql-1.3.2-linux_x86_64.bash
+          SNOWSQL_DEST=/bin SNOWSQL_LOGIN_SHELL=/.profile bash snowsql-1.3.2-linux_x86_64.bash
+
+      # Step 5: Prepare private key for Snowflake authentication
+      - name: Prepare user private key
+        run: |
+          printf '%s\n' "${{ secrets.SF_DW_PROD_TEST_USER_PRIVATE_KEY }}" > ./private_key.pem
+
+      # Step 6: Deploy changed SQL files to Snowflake
+      - name: Deploy Changed SQL Files to Snowflake
+        if: steps.changed_files.outputs.changed_files != ''
+        run: |
+          echo "Deploying changed SQL files"
+          SQL_DIR="Database"
+          CHANGED_FILES="${{ steps.changed_files.outputs.changed_files }}"
+
+          DEPLOYED_FILES=""
+          FAILED_FILES=""
+
+          echo "$CHANGED_FILES" | while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Executing $file..."
+              if ~/bin/snowsql \
+                -a "${{ secrets.SF_DW_PROD_TEST_ACCOUNT }}" \
+                -u "${{ secrets.SF_DW_PROD_TEST_USER }}" \
+                --private-key-path ./private_key.pem \
+                -f "$file" \
+                -d "${{ secrets.SF_DW_PROD_TEST_DB }}" \
+                -r "${{ secrets.SF_DW_PROD_TEST_ROLE }}" \
+                -w "${{ secrets.SF_DW_PROD_TEST_WH }}" \
+                -o log_level=DEBUG; then
+                DEPLOYED_FILES="$DEPLOYED_FILES\n$file"
+              else
+                FAILED_FILES="$FAILED_FILES\n$file"
+              fi
+            else
+              echo "File $file does not exist. Skipping."
+            fi
+          done
+
+          {
+            echo "### Deployment Summary"
+            if [ -n "$DEPLOYED_FILES" ]; then
+              echo "✅ Successfully deployed:"
+              echo "$DEPLOYED_FILES"
+            fi
+            if [ -n "$FAILED_FILES" ]; then
+              echo "❌ Failed deployments:"
+              echo "$FAILED_FILES"
+            fi
+          } >> $GITHUB_STEP_SUMMARY
+
+      # Step 7: Save current commit SHA for next run
+      - name: Save last deployed commit
+        if: success()
+        run: |
+          echo "${{ github.event.pull_request.head.sha || github.sha }}" > .last_deploy_commit
