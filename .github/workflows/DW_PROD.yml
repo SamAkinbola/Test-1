@@ -1,0 +1,85 @@
+name: RUBIX_DW_PROD
+
+on:
+  pull_request:
+    types: [closed] # Trigger when a PR is closed (merged)
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build:
+    # ✅ Run only when PR is merged AND has the label 'DW_PROD'
+    if: >
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'DW_PROD')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+
+      - name: Install SnowSQL
+        env:
+          SNOWSQL_PRIVATE_KEY_PASSPHRASE: "${{ secrets.SF_DW_PROD_PRIVATE_KEY_PWD }}"
+        run: |
+          curl -O https://sfc-repo.snowflakecomputing.com/snowsql/bootstrap/1.3/linux_x86_64/snowsql-1.3.2-linux_x86_64.bash
+          SNOWSQL_DEST=~/bin SNOWSQL_LOGIN_SHELL=~/.profile bash snowsql-1.3.2-linux_x86_64.bash
+
+      - name: Prepare user private Key
+        run: |
+          printf '%s\n' "${{ secrets.SF_DW_PROD_USER_PRIVATE_KEY }}" > ./private_key.pem
+
+      - name: Identify Changed SQL Files
+        id: changed_files
+        run: |
+          echo "Identifying changed SQL files"
+          SQL_DIR="Database"
+
+          if [ ! -d "$SQL_DIR" ]; then
+            echo "SQL directory $SQL_DIR does not exist. Skipping deployment."
+            exit 0
+          fi
+
+          # Get list of changed SQL files (added or modified) in the Database/ directory
+          CHANGED_FILES=$(git diff --name-only --diff-filter=AM HEAD^ HEAD "$SQL_DIR" | grep -i '\.sql$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No new or modified SQL files found. Skipping deployment."
+            exit 0
+          fi
+
+          # Store the changed files in an output variable
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Deploy Changed SQL Files to Snowflake
+        if: steps.changed_files.outputs.changed_files != ''
+        run: |
+          echo "Deploying changed SQL files"
+          SQL_DIR="Database"
+
+          # Read changed files from the output
+          CHANGED_FILES="${{ steps.changed_files.outputs.changed_files }}"
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No SQL files to deploy."
+            exit 0
+          fi
+
+          # Loop through changed SQL files and execute them
+          echo "$CHANGED_FILES" | while read file; do
+            if [ -f "$file" ]; then
+              echo "Executing $file..."
+              ~/bin/snowsql \
+                -a ${{ secrets.SF_DW_PROD_ACCOUNT }} \
+                -u ${{ secrets.SF_DW_PROD_USER }} \
+                --private-key-path ./private_key.pem \
+                -f "$file" \
+                -d ${{ secrets.SF_DW_PROD_DB }} \
+                -r ${{ secrets.SF_DW_PROD_ROLE }} \
+                -w ${{ secrets.SF_DW_PROD_WH }} || { echo "Failed executing $file"; exit 1; }
+            else
+              echo "File $file does not exist. Skipping."
+            fi
+          done
